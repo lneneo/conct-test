@@ -1,0 +1,2252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Help Me Live</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+    html, body { width: 100%; background: #000; overflow-y: auto; }
+
+    /* ── Background grid ───────────────────────────────────────────────── */
+    #bg-grid {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100dvh;
+      z-index: 1; overflow: hidden; pointer-events: none;
+      -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, rgba(0,0,0,0.2) 30%, black 100%);
+      mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, rgba(0,0,0,0.2) 30%, black 100%);
+      background-image:
+        linear-gradient(rgba(255,255,255,0.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.10) 1px, transparent 1px),
+        linear-gradient(45deg,  rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(-45deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 80px 80px, 80px 80px, 80px 80px, 80px 80px;
+    }
+    #bg-grid::after {
+      content: '';
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cline x1='0' y1='0' x2='6' y2='0' stroke='white' stroke-width='1'/%3E%3Cline x1='74' y1='0' x2='80' y2='0' stroke='white' stroke-width='1'/%3E%3Cline x1='0' y1='0' x2='0' y2='6' stroke='white' stroke-width='1'/%3E%3Cline x1='0' y1='74' x2='0' y2='80' stroke='white' stroke-width='1'/%3E%3C/svg%3E");
+      background-size: 80px 80px;
+      opacity: 0.4; pointer-events: none;
+    }
+    @media (max-width: 600px) {
+      #bg-grid { background-size: 60px 60px, 60px 60px, 60px 60px, 60px 60px; }
+      #bg-grid::after { background-size: 60px 60px; }
+    }
+    /* Light mode invert */
+    #bg-grid[data-mode="light"] {
+      background-image:
+        linear-gradient(rgba(0,0,0,0.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,0,0,0.10) 1px, transparent 1px),
+        linear-gradient(45deg,  rgba(0,0,0,0.03) 1px, transparent 1px),
+        linear-gradient(-45deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+    }
+    #bg-grid[data-mode="light"]::after {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cline x1='0' y1='0' x2='6' y2='0' stroke='black' stroke-width='1'/%3E%3Cline x1='74' y1='0' x2='80' y2='0' stroke='black' stroke-width='1'/%3E%3Cline x1='0' y1='0' x2='0' y2='6' stroke='black' stroke-width='1'/%3E%3Cline x1='0' y1='74' x2='0' y2='80' stroke='black' stroke-width='1'/%3E%3C/svg%3E");
+    }
+    /* Grid text */
+    #bg-text-h {
+      position: fixed; top: 11.5%; left: 50%; transform: translateX(-50%);
+      font-family: monospace; font-size: clamp(10px, 1.4vw, 18px); font-weight: 700;
+      letter-spacing: 0.95em; color: rgba(255, 255, 255, 0.5);
+      white-space: nowrap; pointer-events: none; z-index: 2;
+    }
+    #bg-text-v {
+      position: fixed; left: -5%; top: 50%;
+      transform: translateY(-50%) rotate(-90deg);
+      transform-origin: center center;
+      font-family: monospace; font-size: clamp(8px, 1vw, 13px);
+      letter-spacing: 0.3em; color: rgba(255,255,255,0.25);
+      white-space: nowrap; pointer-events: none; z-index: 2;
+    }
+    body.light-mode #bg-text-h,
+    body.light-mode #bg-text-v { color: rgba(0,0,0,0.55); }
+
+    canvas { display: block; cursor: grab; position: fixed; top: 0; left: 0; z-index: 0; }
+    canvas:active { cursor: grabbing; }
+    #canvas-spacer { height: calc(100dvh - 110px); }
+    @media (max-width: 600px) {
+      #canvas-spacer { height: calc(100dvh - 150px); }
+    }
+
+    .ui-element {
+      position: fixed;
+      z-index: 10;
+      font-family: monospace;
+      font-size: 11px;
+      color: #fff;
+      background: rgba(0,0,0,0.5);
+      border: 0.5px solid rgba(255,255,255,0.1);
+      opacity: 0.6;
+      transition: opacity 0.2s ease;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .ui-element:hover { opacity: 1.0; }
+
+    #dev-panel {
+      top: 50%; left: 20px; transform: translateY(-50%);
+      border-radius: 8px; padding: 10px 14px;
+      min-width: 200px;
+    }
+    .dp-row { display: flex; align-items: center; gap: 8px; line-height: 2.2; }
+    .dp-label { font-size: 10px; letter-spacing: 0.08em; opacity: 0.5; text-transform: uppercase; min-width: 46px; }
+    .dp-val   { font-size: 12px; }
+    .dp-btn {
+      background: none; border: 0.5px solid rgba(255,255,255,0.25); border-radius: 4px;
+      color: #fff; font-family: monospace; font-size: 13px; width: 22px; height: 22px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
+    }
+    .dp-btn:hover { background: rgba(255,255,255,0.1); }
+    .dp-btn-wide {
+      background: none; border: 0.5px solid rgba(255,255,255,0.25); border-radius: 4px;
+      color: #fff; font-family: monospace; font-size: 10px; padding: 2px 8px; height: 22px;
+      cursor: pointer; white-space: nowrap;
+    }
+    .dp-btn-wide:hover { background: rgba(255,255,255,0.1); }
+    .dp-divider { border: none; border-top: 0.5px solid rgba(255,255,255,0.08); margin: 3px 0; }
+    .dp-toggles { display: flex; gap: 10px; flex-wrap: wrap; padding: 2px 0; }
+    .dp-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 10px; opacity: 0.7; }
+    .dp-toggles label:hover { opacity: 1; }
+
+    /* Minter rows */
+    #minter-list { padding: 2px 0; max-height: 50vh; overflow-y: auto; }
+    .minter-row { display: flex; align-items: center; gap: 6px; line-height: 2.2; }
+    .minter-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .minter-label { font-size: 10px; opacity: 0.6; flex: 1; }
+    .minter-count { font-size: 12px; min-width: 20px; text-align: center; }
+
+    #sound-btn {
+      top: 108px; right: 20px; width: 36px; height: 36px;
+      border-radius: 50%; border: 1px solid #AEEA00; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 20; color: #AEEA00; background: #000000d1;
+    }
+    #btn-autoplay {
+      top: 152px; right: 20px; width: 36px; height: 36px;
+      border-radius: 50%; border: 1px solid #AEEA00; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 20; color: #AEEA00; background: #000000d1;
+      transition: background 0.2s;
+    }
+    #btn-autoplay.is-playing { background: rgba(174,234,0,0.15); }
+    #btn-scaffold, #btn-table {
+      width: 36px; height: 36px; right: 20px;
+      border-radius: 50%; border: 1px solid #AEEA00; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 20; color: #AEEA00; background: #000000d1;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    #btn-scaffold { top: 196px; }
+    #btn-table    { top: 240px; }
+    #btn-scaffold.is-off, #btn-table.is-off { opacity: 0.35; }
+    #btn-labels {
+      top: 284px; right: 20px; width: 36px; height: 36px;
+      border-radius: 50%; border: 1px solid #AEEA00; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 20; color: #AEEA00; background: #000000d1;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    #btn-labels.is-off { opacity: 0.35; }
+    #btn-exposure {
+      top: 328px; right: 20px; width: 36px; height: 36px;
+      border-radius: 50%; border: 1px solid #AEEA00; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+      z-index: 20; color: #AEEA00; background: #000000d1;
+    }
+    #ui-toggle-btn {
+      top: 108px; right: 20px; width: 36px; height: 36px;
+      border-radius: 50%; border: 1px solid #AEEA00; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 10px;
+      z-index: 20; color: #AEEA00; background: #000000d1;
+    }
+    #btn-png-corner, #btn-glb-corner {
+      top: 20px; right: 20px; width: 36px; height: 36px;
+      border-radius: 50%; border: 1px solid #AEEA00; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 10px;
+      letter-spacing: 0.02em; z-index: 20; color: #AEEA00; background: #000000d1;
+    }
+    #btn-glb-corner { top: 64px; }
+
+    #minter-table {
+      position: relative;
+      z-index: 1;
+      padding: 12px 20px 40px;
+      font-family: monospace;
+      color: #fff;
+      pointer-events: none;
+      background: #000000d1;
+    }
+    .mt-cell { pointer-events: auto; }
+    #mt-header-row {
+      display: flex; align-items: baseline; gap: 16px;
+      margin-bottom: 10px;
+      border-bottom: 0.5px solid rgba(255,255,255,0.06);
+      padding-bottom: 6px;
+    }
+    #mt-title {
+      font-size: 11px; letter-spacing: 0.3em;
+      text-transform: uppercase; opacity: 0.9;
+      flex: 1;
+    }
+    #mt-stats {
+      font-size: 9px; opacity: 0.3; letter-spacing: 0.12em;
+    }
+    #mt-rows {
+      display: flex; flex-wrap: wrap; gap: 4px;
+    }
+    .mt-cell {
+      width: 64px; height: 64px;
+      border: 0.5px solid rgba(255,255,255,0.08);
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      padding: 5px 6px 4px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+    .mt-cell::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 1.5px;
+      background: var(--accent);
+      opacity: 0.7;
+    }
+    .mt-cell-num {
+      font-size: 8px; opacity: 0.3; text-align: right;
+      letter-spacing: 0.05em;
+    }
+    .mt-cell-symbol {
+      font-size: 18px; font-weight: bold; letter-spacing: -0.02em;
+      color: var(--accent); opacity: 0.9;
+      line-height: 1;
+      text-shadow: 0 0 12px var(--accent);
+    }
+    .mt-cell-addr {
+      font-size: 7px; opacity: 0.3; letter-spacing: 0.04em;
+      white-space: nowrap; overflow: hidden;
+    }
+    .mt-cell-minted {
+      font-size: 7px; opacity: 0.5; letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .mt-cell.is-active {
+      background: var(--accent-dim);
+      border-color: var(--accent-mid);
+    }
+    .mt-cell.is-active .mt-cell-symbol { opacity: 1; }
+    .mt-cell.is-active .mt-cell-addr,
+    .mt-cell.is-active .mt-cell-minted { opacity: 0.6; }
+
+    #label-svg {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 10;
+    }
+    .ni-label {
+      position: fixed; width: 170px;
+      padding: 9px 13px;
+      background: rgba(0,0,0,0.78);
+      border: 0.5px solid rgba(255,255,255,0.08);
+      font-family: monospace; color: #fff;
+      pointer-events: auto; cursor: pointer; z-index: 11;
+      transform: translateY(-50%);
+      transition: background 0.25s, border-color 0.25s;
+    }
+    .ni-label.ni-left  { border-left:  1.5px solid var(--accent); }
+    .ni-label.ni-right { border-right: 1.5px solid var(--accent); text-align: right; }
+    .ni-label.ni-active { background: var(--accent-dim); width: 280px; }
+    .ni-label.ni-active.ni-left  { border-left-width:  4px; border-left-color:  var(--accent-mid); }
+    .ni-label .ni-row { display: flex; align-items: center; gap: 7px; }
+    .ni-label.ni-right .ni-row { flex-direction: row-reverse; }
+    .ni-label .ni-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .ni-label .ni-address   { font-size: 11px; opacity: 0.85; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ni-label .ni-date      { font-size: 10px; opacity: 0.4; margin-top: 4px; letter-spacing: 0.04em; }
+    .ni-label .ni-count     { font-size: 10px; opacity: 0.4; margin-top: 2px; }
+    .ni-label.ni-active { width: 333px; }
+    .ni-label.ni-active .ni-date  { opacity: 0.65; }
+    .ni-label.ni-active .ni-count { opacity: 0.75; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.11.1/dist/ethers.umd.min.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="bg-grid"></div>
+  <div id="bg-text-h">PEEPSLOVESYOU</div>
+  <div id="bg-text-v">CONNECTION ∞ INTERCONNECTIONS</div>
+
+  <button id="btn-png-corner" class="ui-element" title="Save WebP" data-html2canvas-ignore="true">IMG</button>
+  <button id="btn-glb-corner" class="ui-element" title="Download GLB" data-html2canvas-ignore="true">GLB</button>
+  <button id="sound-btn" class="ui-element" title="Toggle sound" data-html2canvas-ignore="true">
+    <svg id="sound-icon" width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="3,6 7,6 11,2 11,16 7,12 3,12" fill="#AEEA00"/>
+      <g id="sound-waves">
+        <path d="M13 6.5 C14.5 7.5 14.5 10.5 13 11.5" stroke="#AEEA00" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+        <path d="M15 4.5 C17.5 6.5 17.5 11.5 15 13.5" stroke="#AEEA00" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      </g>
+      <line id="mute-line" x1="3" y1="3" x2="15" y2="15" stroke="#AEEA00" stroke-width="1.5" stroke-linecap="round" display="none"/>
+    </svg>
+  </button>
+  <button id="btn-autoplay" class="ui-element" title="Auto-play" data-html2canvas-ignore="true">
+    <svg id="autoplay-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <polygon id="autoplay-play" points="4,2 14,8 4,14" fill="#AEEA00"/>
+      <g id="autoplay-stop" display="none">
+        <rect x="3" y="2" width="4" height="12" fill="#AEEA00"/>
+        <rect x="9" y="2" width="4" height="12" fill="#AEEA00"/>
+      </g>
+    </svg>
+  </button>
+  <button id="btn-scaffold" class="ui-element" title="Toggle scaffold" data-html2canvas-ignore="true">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="9" cy="4" r="2" fill="#AEEA00"/>
+      <circle cx="3" cy="14" r="2" fill="#AEEA00"/>
+      <circle cx="15" cy="14" r="2" fill="#AEEA00"/>
+      <line x1="9" y1="4" x2="3" y2="14" stroke="#AEEA00" stroke-width="1"/>
+      <line x1="9" y1="4" x2="15" y2="14" stroke="#AEEA00" stroke-width="1"/>
+      <line x1="3" y1="14" x2="15" y2="14" stroke="#AEEA00" stroke-width="1"/>
+    </svg>
+  </button>
+  <button id="btn-table" class="ui-element" title="Toggle table" data-html2canvas-ignore="true">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="6" height="6" stroke="#AEEA00" stroke-width="1"/>
+      <rect x="10" y="2" width="6" height="6" stroke="#AEEA00" stroke-width="1"/>
+      <rect x="2" y="10" width="6" height="6" stroke="#AEEA00" stroke-width="1"/>
+      <rect x="10" y="10" width="6" height="6" stroke="#AEEA00" stroke-width="1"/>
+    </svg>
+  </button>
+  <button id="btn-labels" class="ui-element" title="Toggle labels" data-html2canvas-ignore="true">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="4" width="14" height="8" rx="1" stroke="#AEEA00" stroke-width="1"/>
+      <line x1="4" y1="7.5" x2="12" y2="7.5" stroke="#AEEA00" stroke-width="1"/>
+      <line x1="4" y1="10.5" x2="9" y2="10.5" stroke="#AEEA00" stroke-width="1"/>
+    </svg>
+  </button>
+  <button id="btn-exposure" class="ui-element" title="Toggle exposure" data-html2canvas-ignore="true">☀</button>
+  <div id="canvas-spacer"></div>
+  <div id="minter-table">
+    <div id="mt-header-row">
+      <div id="mt-title">THIS IS OUR COMMUNITY</div>
+      <div id="mt-stats"></div>
+    </div>
+    <div id="mt-rows"></div>
+  </div>
+
+  <svg id="label-svg"></svg>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+    import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+    import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+    import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+    // ─── NucleusBoopProcessor AudioWorklet (Blob URL pattern) ────────────────
+
+    const WORKLET_CODE = `
+class NucleusBoopProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this._voices = [];
+    this.port.onmessage = (e) => {
+      if (e.data.trigger && this._voices.length < 16) {
+        const { freq, attackMs, decayMs, gain, type } = e.data.trigger;
+        this._voices.push({
+          freq, phase: 0, gain: gain || 0.25, type: type || 'sine',
+          attackSamp: Math.floor(attackMs * sampleRate / 1000),
+          totalSamp:  Math.floor((attackMs + decayMs) * sampleRate / 1000),
+          sample: 0,
+        });
+      }
+    };
+  }
+  _sample(v) {
+    const p = v.phase * Math.PI * 2;
+    if (v.type === 'triangle') {
+      return 2 * Math.abs(2 * (v.phase - Math.floor(v.phase + 0.5))) - 1;
+    }
+    if (v.type === 'additive') {
+      // fundamental + octave (0.5) + fifth (0.3) — warm organ-like
+      return Math.sin(p) + Math.sin(p * 2) * 0.5 + Math.sin(p * 3) * 0.3;
+    }
+    return Math.sin(p);
+  }
+  process(inputs, outputs) {
+    const out = outputs[0][0];
+    if (!out) return true;
+    this._voices = this._voices.filter(v => v.sample < v.totalSamp);
+    for (let i = 0; i < out.length; i++) {
+      let s = 0;
+      for (const v of this._voices) {
+        const env = v.sample < v.attackSamp
+          ? v.sample / v.attackSamp
+          : 1.0 - (v.sample - v.attackSamp) / (v.totalSamp - v.attackSamp);
+        v.phase += v.freq / sampleRate;
+        if (v.phase > 1) v.phase -= 1;
+        s += this._sample(v) * Math.max(0, env) * v.gain;
+        v.sample++;
+      }
+      out[i] = s * 0.55;
+    }
+    return true;
+  }
+}
+registerProcessor('nucleus-boop', NucleusBoopProcessor);
+`;
+
+    // ─── Performance constants ──────────────────────────────────────────────────
+
+    const CFG = {
+      NUCLEUS_RADIUS:       0.045,
+      MAX_CONNECTIONS:      6,
+      CONNECTION_RADIUS:    2.0,   // world-space units — increase to reach further
+      CONNECTOR_WIDTH:      1.4,   // pixels — requires LineMaterial (not LineBasicMaterial)
+      BLOB_SUBTRACT:        16,
+      RES_MIN:              48,
+      RES_MAX:              64,
+      RES_COUNT_SCALE:      50,
+      SCALE_BASE:           0.9,
+      SCALE_MAX:            2.5,
+      SCALE_COUNT_SCALE:    150,
+      STRENGTH_BASE:        0.8,
+      STRENGTH_MAX:         2.5,
+      STRENGTH_COUNT_SCALE: 50,
+      CLUMP_DISTANCE:       0.25,  // how far minter clumps sit from centre. 0=centre, 0.4=near surface
+      CLUSTER_SPREAD:       0.04,  // distance between individual nuclei within one clump. 0.01=tight, 0.08=loose
+      MAX_MINTERS:          100,    // ← how many different minters can exist simultaneously
+      MAX_MINTS_PER_MINTER: 200,   // ← max times a single minter can mint
+    };
+
+    // ─── Colour palette — 49 minter colours (cycles if more minters than colours) ─
+
+    const PALETTE = [
+      { name: 'Bioluminescent Cyan', hex: '#00E5FF' },
+      { name: 'Iridescent Lavender', hex: '#B39DDB' },
+      { name: 'Pearl Mint',          hex: '#A8EDCA' },
+      { name: 'Luminous White',      hex: '#E8F4F8' },
+      { name: 'Champagne Gold',      hex: '#FFD54F' },
+      { name: 'Holographic Silver',  hex: '#B0BEC5' },
+      { name: 'Aurora Violet',       hex: '#CE93D8' },
+      { name: 'Seafoam',             hex: '#80CBC4' },
+      { name: 'Warm Pearl',          hex: '#FFE0B2' },
+      { name: 'Electric Rose',       hex: '#FF4081' },
+      { name: 'Sky Indigo',          hex: '#5C6BC0' },
+      { name: 'Jade Green',          hex: '#4DB6AC' },
+      { name: 'Ember Orange',        hex: '#FF7043' },
+      { name: 'Ice Blue',            hex: '#80DEEA' },
+      { name: 'Blush Peach',         hex: '#FFCCBC' },
+      { name: 'Deep Amethyst',       hex: '#9575CD' },
+      { name: 'Lime Pulse',          hex: '#C6FF00' },
+      { name: 'Dusty Rose',          hex: '#F48FB1' },
+      { name: 'Steel Teal',          hex: '#546E7A' },
+      { name: 'Neon Aqua',           hex: '#18FFFF' },
+      { name: 'Saffron',             hex: '#FFB300' },
+      { name: 'Orchid',              hex: '#EA80FC' },
+      { name: 'Mint Cream',          hex: '#E0F7FA' },
+      { name: 'Copper',              hex: '#FF8A65' },
+      { name: 'Moonstone',           hex: '#90CAF9' },
+      { name: 'Acid Green',          hex: '#AEEA00' },
+      { name: 'Crimson Glow',        hex: '#FF5252' },
+      { name: 'Electric Red',        hex: '#FF1744' },
+      { name: 'Pearl Pink',          hex: '#F8BBD0' },
+      { name: 'Cobalt',              hex: '#448AFF' },
+      // ── Iridescents ───────────────────────────────────────────────────────
+      { name: 'Labradorite',         hex: '#3FFFD2' },
+      { name: 'Peacock Teal',        hex: '#00BFAF' },
+      { name: 'Iridescent Moss',     hex: '#A8FF78' },
+      { name: 'Spectral Lime',       hex: '#B2FF59' },
+      { name: 'Plasma Green',        hex: '#69FF47' },
+      { name: 'Absinthe',            hex: '#39FF14' },
+      { name: 'Verdigris',           hex: '#43B97F' },
+      { name: 'Aurora Green',        hex: '#00FF87' },
+      { name: 'Biome',               hex: '#76FF7A' },
+      { name: 'Serpentine',          hex: '#5D9B6E' },
+      { name: 'Peacock Violet',      hex: '#7B2FBE' },
+      { name: 'Dichroic Fuchsia',    hex: '#E040FB' },
+      { name: 'Alexandrite',         hex: '#9C27B0' },
+      { name: 'Prism Shift',         hex: '#651FFF' },
+      { name: 'Holographic Rose',    hex: '#FF80AB' },
+      { name: 'Oil Slick',           hex: '#4FC3F7' },
+      { name: 'Iridescent Gold',     hex: '#FFE57F' },
+      { name: 'Interference Blue',   hex: '#40C4FF' },
+      { name: 'Spectral Cyan',       hex: '#84FFFF' },
+      { name: 'Aurora Chartreuse',   hex: '#CCFF90' },
+    ];
+
+    // ─── Renderer ──────────────────────────────────────────────────────────────
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.body.appendChild(renderer.domElement);
+
+    // ─── Scene + Camera ────────────────────────────────────────────────────────
+
+    const scene = new THREE.Scene();
+
+    // Gradient background
+    const bgCanvas = document.createElement('canvas');
+    bgCanvas.width = 512; bgCanvas.height = 512;
+    const bgCtx = bgCanvas.getContext('2d');
+    const bgGrad = bgCtx.createRadialGradient(256, 300, 0, 256, 300, 380);
+    bgGrad.addColorStop(0.0, '#000000');
+    bgGrad.addColorStop(0.5, '#060606');
+    bgGrad.addColorStop(1.0, '#050505');
+    bgCtx.fillStyle = bgGrad;
+    bgCtx.fillRect(0, 0, 512, 512);
+    scene.background = new THREE.CanvasTexture(bgCanvas);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 5);
+
+    // ─── OrbitControls ─────────────────────────────────────────────────────────
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.018;
+    controls.enablePan     = true;
+    controls.minDistance   = 1.0;
+    controls.maxDistance   = 30.0;
+
+    // ─── Lighting ──────────────────────────────────────────────────────────────
+
+    scene.add(new THREE.AmbientLight(0x000a14, 3.0));
+    const keyLight = new THREE.PointLight(0x00ccff, 3.0, 30);
+    keyLight.position.set(3, 4, 5);
+    scene.add(keyLight);
+    const fillLight = new THREE.PointLight(0x0030aa, 2.0, 30);
+    fillLight.position.set(-4, -2, 2);
+    scene.add(fillLight);
+
+
+    // ─── Helper functions ──────────────────────────────────────────────────────
+
+    function seededRandom(seed) {
+      const x = Math.sin(seed + 1) * 10000;
+      return x - Math.floor(x);
+    }
+
+    // ─── Nucleus voice system ─────────────────────────────────────────────────
+    // Pitch pools by register — pentatonic base with Hijaz colour tones as anomalies
+    // Hijaz intervals: augmented 2nd gives the Arabic/tense character
+    const PITCH_BASS = [55, 65, 73, 82, 98, 110, 117, 130]; // ~A1–C3, pentatonic + Hijaz
+    const PITCH_MID  = [196, 220, 261, 294, 330, 349, 392, 415, 440]; // ~G3–A4
+    const PITCH_HIGH = [523, 587, 659, 784, 880, 988, 1047, 1175, 1319]; // ~C5–E6
+
+    // Envelope presets: [attackMs, decayMsBase, stepLengths[]]
+    const ENV_STACCATO = { attackMs: 8,  decayBase: 60,  steps: [0.25, 0.25, 0.5,  0.5,  0.75] };
+    const ENV_NORMAL   = { attackMs: 20, decayBase: 100, steps: [0.5,  0.5,  0.75, 1.0,  1.5 ] };
+    const ENV_LEGATO   = { attackMs: 80, decayBase: 300, steps: [1.0,  1.5,  2.0,  3.0,  4.0 ] };
+    const ENVS = [ENV_STACCATO, ENV_NORMAL, ENV_LEGATO];
+
+    const VOICE_TYPES = ['sine', 'sine', 'triangle', 'additive']; // sine weighted more
+
+    function soulPrint(address) {
+      let s = 0;
+      for (let i = 0; i < address.length; i++) s = ((s << 5) - s + address.charCodeAt(i)) | 0;
+      return Math.abs(s);
+    }
+
+    function getMinterPersonality(address) {
+      const seed = soulPrint(address);
+      // Three independent genes from different parts of the seed
+      const registerGene = seed % 3;                           // 0=bass, 1=mid, 2=high
+      const voiceGene    = Math.floor(seed / 3) % VOICE_TYPES.length;
+      const envGene      = Math.floor(seed / 12) % ENVS.length;
+      return {
+        pool:  [PITCH_BASS, PITCH_MID, PITCH_HIGH][registerGene],
+        type:  VOICE_TYPES[voiceGene],
+        env:   ENVS[envGene],
+      };
+    }
+
+    function birthSong(address, mintCount) {
+      const seed = soulPrint(address);
+      const { pool, type, env } = getMinterPersonality(address);
+      const n = Math.max(1, mintCount);
+      return Array.from({ length: n }, (_, i) => {
+        const stepR   = seededRandom(seed + i * 4 + 2);
+        const stepLen = env.steps[Math.floor(stepR * env.steps.length)];
+        const decayMs = env.decayBase + seededRandom(seed + i * 4 + 1) * env.decayBase * 0.5 + stepLen * 60;
+        return {
+          isRest: false,
+          freq:   pool[Math.floor(seededRandom(seed + i * 4 + 0) * pool.length)],
+          decayMs,
+          stepLen,
+          type,
+          attackMs: env.attackMs,
+        };
+      });
+    }
+
+    // minterId → { phrase, stepIdx, cycleCount, nextStepAt }
+    const nucleusVoices = new Map();
+
+    function getBlobResolution(count) {
+      const t = Math.min(count, CFG.RES_COUNT_SCALE) / CFG.RES_COUNT_SCALE;
+      return Math.floor(CFG.RES_MIN + t * (CFG.RES_MAX - CFG.RES_MIN));
+    }
+
+    function getBlobScale(count) {
+      const t = Math.min(count, CFG.SCALE_COUNT_SCALE) / CFG.SCALE_COUNT_SCALE;
+      return CFG.SCALE_BASE + t * (CFG.SCALE_MAX - CFG.SCALE_BASE);
+    }
+
+    function getBlobStrength(count) {
+      const t = Math.min(count, CFG.STRENGTH_COUNT_SCALE) / CFG.STRENGTH_COUNT_SCALE;
+      return CFG.STRENGTH_BASE + t * (CFG.STRENGTH_MAX - CFG.STRENGTH_BASE);
+    }
+
+    function fieldToWorld(fx, fy, fz, scale) {
+      return new THREE.Vector3(
+        (fx - 0.5) * 2 * scale,
+        (fy - 0.5) * 2 * scale,
+        (fz - 0.5) * 2 * scale
+      );
+    }
+
+    // Global spread — nuclei distributed across the whole field (minterId colours identify clusters)
+    function calcBasePositions(count) {
+      const spread = Math.min(
+        CFG.SPREAD_BASE + count * CFG.SPREAD_PER_NUCLEUS,
+        CFG.SPREAD_MAX
+      );
+      const positions = [];
+      for (let i = 0; i < count; i++) {
+        const r     = spread * (0.3 + 0.7 * seededRandom(i * 7));
+        const theta = seededRandom(i * 7 + 1) * Math.PI * 2;
+        const phi   = Math.acos(2 * seededRandom(i * 7 + 2) - 1);
+        positions.push({
+          fx: 0.5 + r * Math.sin(phi) * Math.cos(theta),
+          fy: 0.5 + r * Math.sin(phi) * Math.sin(theta),
+          fz: 0.5 + r * Math.cos(phi),
+        });
+      }
+      return positions;
+    }
+
+
+    // ─── Organic drifters — spring-physics satellites attracted to nucleus quadrants ─
+    const phaseOffsets = [1.3, 2.7, 4.1, 5.5];
+
+    // ─── BCC Bravais lattice — pre-computed positions + adjacency ─────────────
+    const bccData = (() => {
+      const n = 4;
+      const raw = [];
+      for (let i = 0; i <= n; i++)
+        for (let j = 0; j <= n; j++)
+          for (let k = 0; k <= n; k++)
+            raw.push([i/n, j/n, k/n]);
+      for (let i = 0; i < n; i++)
+        for (let j = 0; j < n; j++)
+          for (let k = 0; k < n; k++)
+            raw.push([(i+0.5)/n, (j+0.5)/n, (k+0.5)/n]);
+      raw.sort((a, b) => {
+        const da=(a[0]-.5)**2+(a[1]-.5)**2+(a[2]-.5)**2;
+        const db=(b[0]-.5)**2+(b[1]-.5)**2+(b[2]-.5)**2;
+        return da-db;
+      });
+      const pos = raw.map(([x,y,z]) => ({ fx:0.15+x*0.7, fy:0.15+y*0.7, fz:0.15+z*0.7 }));
+      // Threshold captures both BCC body-diagonal (d≈0.152) AND cube edges (d≈0.175)
+      const nnDist = (1/n)*0.7*1.08;
+      const adj = pos.map(()=>[]);
+      for (let i = 0; i < pos.length; i++)
+        for (let j = i+1; j < pos.length; j++) {
+          const dx=pos[i].fx-pos[j].fx, dy=pos[i].fy-pos[j].fy, dz=pos[i].fz-pos[j].fz;
+          if (Math.sqrt(dx*dx+dy*dy+dz*dz) < nnDist) { adj[i].push(j); adj[j].push(i); }
+        }
+      return { pos, adj };
+    })();
+
+    // Cluster anchor — one per minter, placed on BCC lattice node
+    // Cluster anchors evenly distributed on a sphere via Fibonacci/golden angle
+    function calcMinterAnchor(minterId, minterCount) {
+      if (minterCount < 2) return { fx: 0.5, fy: 0.5, fz: 0.5 };
+      const golden = Math.PI * (3 - Math.sqrt(5));
+      const y      = 1 - (minterId / (minterCount - 1)) * 2;
+      const r      = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta  = golden * minterId;
+      return {
+        fx: 0.5 + CFG.CLUMP_DISTANCE * r * Math.cos(theta),
+        fy: 0.5 + CFG.CLUMP_DISTANCE * y,
+        fz: 0.5 + CFG.CLUMP_DISTANCE * r * Math.sin(theta),
+      };
+    }
+
+    // Nuclei within a cluster — tight sphere around their anchor
+    function calcClusterPositions(count, anchor, minterId) {
+      const spread = CFG.CLUSTER_SPREAD;
+      const positions = [];
+      for (let j = 0; j < count; j++) {
+        const seed  = minterId * 1000 + j;
+        const r     = spread * seededRandom(seed * 7);
+        const theta = seededRandom(seed * 7 + 1) * Math.PI * 2;
+        const phi   = Math.acos(2 * seededRandom(seed * 7 + 2) - 1);
+        positions.push({
+          fx: Math.max(0.1, Math.min(0.9, anchor.fx + r * Math.sin(phi) * Math.cos(theta))),
+          fy: Math.max(0.1, Math.min(0.9, anchor.fy + r * Math.sin(phi) * Math.sin(theta))),
+          fz: Math.max(0.1, Math.min(0.9, anchor.fz + r * Math.cos(phi))),
+        });
+      }
+      return positions;
+    }
+
+    // Rebuild all base positions from current minters[]
+    function calcAllBasePositions() {
+      const mc = minters.length;
+      const positions = [];
+      minters.forEach((minter, minterId) => {
+        const anchor = calcMinterAnchor(minterId, mc);
+        calcClusterPositions(minter.count, anchor, minterId)
+          .forEach(p => positions.push(p));
+      });
+      return positions;
+    }
+
+    // Slow whole-cluster drift — all nuclei of a minter move together
+    function getMinterClusterDrift(minterId, t) {
+      const speed  = 0.03 + seededRandom(minterId * 31)      * 0.05;
+      const radius = 0.008 + seededRandom(minterId * 31 + 1) * 0.008;
+      const px     = seededRandom(minterId * 31 + 2) * Math.PI * 2;
+      const py     = seededRandom(minterId * 31 + 3) * Math.PI * 2;
+      return {
+        dx: radius * Math.cos(t * speed + px),
+        dy: radius * Math.sin(t * speed * 0.7 + py),
+        dz: radius * Math.sin(t * speed * 0.5 + px + py),
+      };
+    }
+
+    // Per-nucleus Lissajous drift — creates organic lobes in the blob
+    function getNucleusAnimOffset(i, t) {
+      const speed  = 0.12 + seededRandom(i * 7 + 3) * 0.18;
+      const radius = 0.05 + seededRandom(i * 7 + 4) * 0.08;
+      const px     = seededRandom(i * 7 + 5) * Math.PI * 2;
+      const py     = seededRandom(i * 7 + 6) * Math.PI * 2;
+      return {
+        dx: radius * Math.cos(t * speed + px),
+        dy: radius * Math.sin(t * speed * 0.7 + py),
+        dz: radius * Math.sin(t * speed * 0.5 + px + py),
+      };
+    }
+
+    // Seeded soul address for prototype display
+    function generateSoulAddress(seed) {
+      let addr = '0x';
+      for (let i = 0; i < 40; i++) {
+        addr += Math.floor(seededRandom(seed * 99991 + i * 1327) * 16).toString(16);
+      }
+      return addr;
+    }
+
+    // ─── Contract — Sepolia testnet ───────────────────────────────────────────
+    const CONTRACT_ADDRESS = '0x63B2ec82BaB8A5e70889E7B32Ab2CC28FAFBB9De';
+    const SEPOLIA_RPC      = 'https://ethereum-sepolia-rpc.publicnode.com';
+    const CONTRACT_ABI     = [
+      'function getAllTokens() view returns (uint256[] tokenIds, address[] owners, uint8[] colorIndices, uint256[] mintTimestamps)'
+    ];
+
+    async function fetchOnChainMinters() {
+      try {
+        const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+        const [tokenIds, owners, colorIndices, mintTimestamps] = await contract.getAllTokens();
+
+        // Group tokens by owner address — each unique owner = one minter on the orb
+        const minterMap = new Map();
+        for (let i = 0; i < tokenIds.length; i++) {
+          const addr = owners[i].toLowerCase();
+          if (!minterMap.has(addr)) {
+            minterMap.set(addr, {
+              address: owners[i],
+              colorIdx: Number(colorIndices[i]),
+              mintedAt: Number(mintTimestamps[i]) * 1000, // contract uses seconds, orb uses ms
+              count:    0
+            });
+          }
+          minterMap.get(addr).count++;
+        }
+        return Array.from(minterMap.values());
+      } catch (e) {
+        console.warn('[orb] RPC fetch failed:', e);
+        return [];
+      }
+    }
+
+    // ─── Stub mintedAt dates — 7-day window, seeded spacing ───────────────────
+    function generateMintDate(minterId) {
+      const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+      const maxStep   = WINDOW_MS / CFG.MAX_MINTERS; // ~1.68 h per slot at 100 max
+      let ms = Date.now() - WINDOW_MS;               // minter 0 = exactly 7 days ago
+      for (let i = 0; i < minterId; i++) {
+        ms += maxStep * (0.3 + seededRandom(i * 7919 + 13) * 0.7); // 30–100 % of slot
+      }
+      return Math.min(ms, Date.now());
+    }
+
+    function formatMintDate(ts) {
+      const d = new Date(ts);
+      const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const dd = String(d.getDate()).padStart(2,'0');
+      const hh = String(d.getHours()).padStart(2,'0');
+      const mm = String(d.getMinutes()).padStart(2,'0');
+      return `${dd} ${M[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
+    }
+
+    // ─── Fresnel shaders (unchanged from v6) ───────────────────────────────────
+
+    const fresnelVert = `
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+      varying vec3 vWorldPos;
+      void main() {
+        vNormal = normalize(normalMatrix * normal);
+        vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+        vViewDir = normalize(-mvPos.xyz);
+        vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+        gl_Position = projectionMatrix * mvPos;
+      }
+    `;
+
+    const fresnelFrag = `
+      uniform vec3  rimColor;
+      uniform float rimPower;
+      uniform float rimIntensity;
+      uniform vec3  rippleCenter;
+      uniform float rippleTime;
+      uniform float rippleStrength;
+      uniform float rippleMono;
+      varying vec3  vNormal;
+      varying vec3  vViewDir;
+      varying vec3  vWorldPos;
+
+      void main() {
+        float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vViewDir)));
+        rim = pow(rim, rimPower);
+
+        // Ink drop diffusion — gaussian stain expanding from tap point
+        float dist    = length(vWorldPos - rippleCenter);
+        float spread  = 0.28 + rippleTime * 0.80;
+        float gauss   = exp(-(dist * dist) / (spread * spread));
+        float fade    = exp(-rippleTime * 0.75) * rippleStrength;
+        float inkMask = gauss * fade;
+
+        // Pearl-white in dark mode, electric blue in light mode
+        vec3 inkBase  = mix(vec3(0.05, 0.30, 1.0), vec3(0.05, 0.30, 1.0), rippleMono);
+        vec3 inkColor = mix(inkBase, rimColor, 0.3);
+
+        float alpha = rim * rimIntensity + inkMask * mix(0.9, 0.45, rippleMono);
+        gl_FragColor = vec4(rimColor * rim + inkColor * inkMask, alpha);
+      }
+    `;
+
+    const orbMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        rimColor:      { value: new THREE.Color(0x00e5ff) },
+        rimPower:      { value: 3.0 },
+        rimIntensity:  { value: 1.0 },
+        rippleCenter:  { value: new THREE.Vector3(0, 0, 0) },
+        rippleTime:    { value: -10.0 },
+        rippleStrength:{ value: 0.0 },
+        rippleMono:    { value: 0.0 },
+      },
+      vertexShader:   fresnelVert,
+      fragmentShader: fresnelFrag,
+      transparent:    true,
+      side:           THREE.DoubleSide,
+      depthWrite:     false,
+      blending:       THREE.AdditiveBlending,
+    });
+
+    const rimBaseColor   = new THREE.Color(0x00e5ff);
+    const rimExhaleColor = new THREE.Color('#AEEA00');  // acid green — hold
+
+
+    // ─── Per-minter material factory ───────────────────────────────────────────
+
+    function makeMinterMaterial(colorIdx) {
+      const c = new THREE.Color(PALETTE[colorIdx].hex);
+      return new THREE.MeshStandardMaterial({
+        color:             c,
+        emissive:          c,
+        emissiveIntensity: 0.5,
+        roughness:         0.3,
+        metalness:         0.4,
+        transparent:       true,
+        opacity:           0.85,
+      });
+    }
+
+    // Shared nucleus geometry
+    const nucleusGeo = new THREE.IcosahedronGeometry(CFG.NUCLEUS_RADIUS, 1);
+
+    // ─── Connector line factory ─────────────────────────────────────────────────
+
+    const MAX_PAIRS = 200 * CFG.MAX_CONNECTIONS;
+
+    function makeLineSegments(color, opacity) {
+      const geo = new LineSegmentsGeometry();
+      geo.setPositions(new Float32Array(MAX_PAIRS * 6));
+      geo.instanceCount = 0;
+      // Reference the internal interleaved buffer so we can write to it directly
+      const buf = geo.attributes.instanceStart.data.array;
+      const mat = new LineMaterial({
+        color, linewidth: CFG.CONNECTOR_WIDTH,
+        transparent: true, opacity, depthWrite: false,
+        resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+      });
+      const ls = new LineSegments2(geo, mat);
+      ls.frustumCulled = false;
+      ls.renderOrder   = 4;
+      scene.add(ls);
+      return { ls, buf, geo, mat };
+    }
+
+    // One LineSegments per palette colour (for intra-cluster lines)
+    const intraLinesList = Array.from({ length: CFG.MAX_MINTERS }, (_, i) =>
+      makeLineSegments(new THREE.Color(PALETTE[i % PALETTE.length].hex), 0.7));
+    intraLinesList.forEach(({ ls }) => { ls.visible = false; });
+    // One shared LineSegments for cross-minter connections
+    const { ls: interLinesLS, buf: interLineBuf, geo: interLineGeo } =
+      makeLineSegments(new THREE.Color(0x4488aa), 0.25);
+    interLinesLS.visible = false;
+
+    // ─── State ─────────────────────────────────────────────────────────────────
+
+    // Each minter: { count, colorIdx, material }
+    let minters = [];
+    let nucleiBasePositions = [];
+    let nucleiMeshes        = [];
+    let currentBlobRes      = 0;
+    let baseBlobScale       = CFG.SCALE_BASE;
+    let blobMesh            = null;
+    let showScaffold        = true;
+    let activeRings         = [];
+    const RING_R            = CFG.NUCLEUS_RADIUS * 1.4; // ≈ 0.09 world units
+
+    function totalCount() { return minters.reduce((s, m) => s + m.count, 0); }
+
+    // ─── Nucleus group ─────────────────────────────────────────────────────────
+
+    const nucleiGroup = new THREE.Group();
+    nucleiGroup.renderOrder = 3;
+    scene.add(nucleiGroup);
+
+    // ─── MarchingCubes factory ─────────────────────────────────────────────────
+
+    function makeBlobMesh(res) {
+      const m = new MarchingCubes(res, orbMaterial, false, false, 100000);
+      m.frustumCulled = false;
+      m.renderOrder   = 1;
+      return m;
+    }
+
+
+    // ─── Current minter rim colour — blended from active minters, drives outer blob ──
+
+    let currentMinterColor = new THREE.Color(0x00e5ff); // updated in rebuildAll()
+
+    function updateMinterRimColor() {
+      currentMinterColor.set(0x000000);
+      minters.forEach(m => currentMinterColor.add(new THREE.Color(PALETTE[m.colorIdx].hex)));
+      currentMinterColor.multiplyScalar(1 / minters.length);
+    }
+
+    // ─── rebuildAll — called whenever minters[] changes ────────────────────────
+
+    function rebuildAll() {
+      // Remove all nucleus meshes — clear group children directly
+      while (nucleiGroup.children.length) nucleiGroup.remove(nucleiGroup.children[0]);
+      nucleiMeshes.length = 0;
+
+      updateMinterRimColor();
+
+      const total = totalCount();
+
+      // Recache base positions — BCC lattice with per-minter clusters
+      nucleiBasePositions = calcAllBasePositions();
+
+      // Create meshes per minter, tag with minterId
+      let globalIdx = 0;
+      minters.forEach((minter, minterId) => {
+        for (let j = 0; j < minter.count; j++) {
+          const mesh = new THREE.Mesh(nucleusGeo, minter.material.clone());
+          mesh.userData.minterId  = minterId;
+          mesh.userData.globalIdx = globalIdx;
+          nucleiGroup.add(mesh);
+          nucleiMeshes.push(mesh);
+          globalIdx++;
+        }
+      });
+
+      // Recreate MarchingCubes if resolution changed
+      const newRes = getBlobResolution(Math.max(1, total));
+      if (newRes !== currentBlobRes) {
+        if (blobMesh) scene.remove(blobMesh);
+        blobMesh = makeBlobMesh(newRes);
+        scene.add(blobMesh);
+        currentBlobRes = newRes;
+      }
+
+      baseBlobScale = getBlobScale(Math.max(1, total));
+
+      // Rebuild active rings — one per nucleus, LineSegments2 so linewidth matches connectors
+      activeRings.forEach(({ ring }) => { ring.parent && ring.parent.remove(ring); });
+      activeRings.length = 0;
+      const N_RING = 32;
+      const ringPos = new Float32Array(N_RING * 6);
+      for (let i = 0; i < N_RING; i++) {
+        const a0 = (i / N_RING) * Math.PI * 2, a1 = ((i + 1) / N_RING) * Math.PI * 2;
+        ringPos[i*6+0] = Math.cos(a0)*RING_R; ringPos[i*6+1] = Math.sin(a0)*RING_R; ringPos[i*6+2] = 0;
+        ringPos[i*6+3] = Math.cos(a1)*RING_R; ringPos[i*6+4] = Math.sin(a1)*RING_R; ringPos[i*6+5] = 0;
+      }
+      const sharedRingGeo = new LineSegmentsGeometry();
+      sharedRingGeo.setPositions(ringPos);
+      nucleiMeshes.forEach((mesh) => {
+        const mat = new LineMaterial({
+          color: PALETTE[minters[mesh.userData.minterId].colorIdx].hex,
+          linewidth: CFG.CONNECTOR_WIDTH,
+          transparent: true, opacity: 0.8, depthWrite: false,
+          resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+        });
+        const ring = new LineSegments2(sharedRingGeo, mat);
+        ring.frustumCulled = false;
+        ring.renderOrder = 4;
+        ring.visible = false;
+        nucleiGroup.add(ring);
+        activeRings.push({ ring, mesh, mat });
+      });
+
+    }
+
+    // ─── GLB export ────────────────────────────────────────────────────────────
+    const TUBE_RADIUS   = 0.004;
+    const TUBE_SEGMENTS = 4;
+
+    function buildConnectorTubes() {
+      const tubes = [];
+      const nm = minters.length;
+      if (nm < 2 || !showScaffold) return tubes;
+      const drawn = new Set();
+      const K = Math.min(3, nm - 1);
+      for (let mi = 0; mi < nm; mi++) {
+        const ai = bccData.pos[mi];
+        const color = new THREE.Color(PALETTE[minters[mi].colorIdx].hex);
+        const dists = [];
+        for (let mj = 0; mj < nm; mj++) {
+          if (mj === mi) continue;
+          const aj = bccData.pos[mj];
+          const dx = ai.fx - aj.fx, dy = ai.fy - aj.fy, dz = ai.fz - aj.fz;
+          dists.push({ mj, d: dx*dx + dy*dy + dz*dz });
+        }
+        dists.sort((a, b) => a.d - b.d);
+        for (let k = 0; k < K; k++) {
+          const mj  = dists[k].mj;
+          const key = Math.min(mi, mj) * 1000 + Math.max(mi, mj);
+          if (drawn.has(key)) continue;
+          drawn.add(key);
+          let bestD2 = Infinity, pi = null, pj = null;
+          for (const ma of nucleiMeshes) {
+            if (ma.userData.minterId !== mi) continue;
+            for (const mb of nucleiMeshes) {
+              if (mb.userData.minterId !== mj) continue;
+              const d2 = ma.position.distanceToSquared(mb.position);
+              if (d2 < bestD2) { bestD2 = d2; pi = ma.position.clone(); pj = mb.position.clone(); }
+            }
+          }
+          if (!pi) continue;
+          const len = pi.distanceTo(pj);
+          if (len < 0.001) continue;
+          const mid = new THREE.Vector3().addVectors(pi, pj).multiplyScalar(0.5);
+          const tubeGeo = new THREE.CylinderGeometry(TUBE_RADIUS, TUBE_RADIUS, len, TUBE_SEGMENTS, 1);
+          tubeGeo.rotateX(Math.PI / 2);
+          const tubeMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.3, roughness: 0.6, metalness: 0.2, transparent: true, opacity: 0.7 });
+          const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+          tubeMesh.position.copy(mid); tubeMesh.lookAt(pj);
+          tubes.push(tubeMesh);
+        }
+        const cluster = nucleiMeshes.filter(m => m.userData.minterId === mi);
+        for (const ma of cluster) {
+          let bestD2 = Infinity, nearest = null;
+          for (const mb of cluster) {
+            if (mb === ma) continue;
+            const d2 = ma.position.distanceToSquared(mb.position);
+            if (d2 < bestD2) { bestD2 = d2; nearest = mb; }
+          }
+          if (!nearest) continue;
+          const ikey = ma.userData.globalIdx * 10000 + nearest.userData.globalIdx;
+          if (drawn.has(ikey)) continue;
+          drawn.add(ikey);
+          const len = ma.position.distanceTo(nearest.position);
+          if (len < 0.001) continue;
+          const mid = new THREE.Vector3().addVectors(ma.position, nearest.position).multiplyScalar(0.5);
+          const tubeGeo = new THREE.CylinderGeometry(TUBE_RADIUS, TUBE_RADIUS, len, TUBE_SEGMENTS, 1);
+          tubeGeo.rotateX(Math.PI / 2);
+          const tubeMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4, roughness: 0.5, metalness: 0.2, transparent: true, opacity: 0.7 });
+          const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+          tubeMesh.position.copy(mid); tubeMesh.lookAt(nearest.position);
+          tubes.push(tubeMesh);
+        }
+      }
+      return tubes;
+    }
+
+    async function exportGLB() {
+      const btn = document.getElementById('btn-glb-corner');
+      btn.textContent = '⏳'; btn.disabled = true;
+      await new Promise(r => setTimeout(r, 50));
+      try {
+        const exportScene = new THREE.Scene();
+        let blobGeoClone;
+        if (typeof blobMesh.generateGeometry === 'function') {
+          blobGeoClone = blobMesh.generateGeometry();
+        } else {
+          blobGeoClone = blobMesh.geometry.clone();
+        }
+        const blobExportMat = new THREE.MeshPhysicalMaterial({
+          color:                     new THREE.Color(0.00152, 0.00243, 0.00518), // baseColorFactor from Babylon
+          opacity:                   0.41,                                        // baseColorFactor alpha
+          transparent:               true,
+          metalness:                 0.55,
+          roughness:                 0.29,
+          emissive:                  new THREE.Color(0, 0.0935, 0.33),           // emissiveFactor from Babylon
+          emissiveIntensity:         1.0,
+          ior:                       1.58,                                        // KHR_materials_ior
+          iridescence:               1.0,                                         // KHR_materials_iridescence
+          iridescenceIOR:            2.17,
+          iridescenceThicknessRange: [120, 430],
+          specularIntensity:         0.75,                                        // KHR_materials_specular
+          specularColor:             new THREE.Color(0.5, 0.9917, 1.0),          // cyan specular tint
+          side:                      THREE.DoubleSide,
+        });
+        const blobExportMesh = new THREE.Mesh(blobGeoClone, blobExportMat);
+        blobExportMesh.scale.copy(blobMesh.scale); blobExportMesh.name = 'HML_Blob';
+        exportScene.add(blobExportMesh);
+        nucleiMeshes.forEach((nm, i) => {
+          const srcMat = nm.material;
+          const clonedMat = new THREE.MeshStandardMaterial({ color: srcMat.color.clone(), emissive: srcMat.emissive.clone(), emissiveIntensity: srcMat.emissiveIntensity, roughness: srcMat.roughness, metalness: srcMat.metalness, transparent: srcMat.transparent, opacity: srcMat.opacity });
+          const clonedMesh = new THREE.Mesh(nm.geometry.clone(), clonedMat);
+          clonedMesh.position.copy(nm.position); clonedMesh.rotation.copy(nm.rotation); clonedMesh.name = 'HML_Nucleus_' + i;
+          exportScene.add(clonedMesh);
+        });
+        buildConnectorTubes().forEach((tube, i) => { tube.name = 'HML_Connector_' + i; exportScene.add(tube); });
+        const glb = await new GLTFExporter().parseAsync(exportScene, { binary: true });
+        const url = URL.createObjectURL(new Blob([glb], { type: 'application/octet-stream' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = downloadFilename('glb');
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        exportScene.traverse(obj => { if (obj.geometry) obj.geometry.dispose(); if (obj.material) obj.material.dispose(); });
+        btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = 'GLB'; btn.disabled = false; }, 2000);
+      } catch (err) {
+        console.error('GLB export failed:', err);
+        btn.textContent = '✗';
+        setTimeout(() => { btn.textContent = 'GLB'; btn.disabled = false; }, 2000);
+      }
+    }
+
+    // ─── updateConnectorLines — routes intra vs inter by minterId ──────────────
+
+    function updateConnectorLines(meshes) {
+      intraLinesList.forEach(({ geo }) => { geo.instanceCount = 0; });
+      interLineGeo.instanceCount = 0;
+      const nm = minters.length;
+      if (nm < 1) return;
+
+      const intraIdx = new Array(CFG.MAX_MINTERS).fill(0);
+      const drawn    = new Set();
+      const K        = Math.min(3, nm - 1); // each minter connects to 3 nearest minter-neighbours
+
+      // For each minter, find K nearest minter anchors and draw one line to each
+      for (let mi = 0; mi < nm; mi++) {
+        const ai = bccData.pos[mi];
+
+        // Sort other minters by anchor distance
+        const dists = [];
+        for (let mj = 0; mj < nm; mj++) {
+          if (mj === mi) continue;
+          const aj = bccData.pos[mj];
+          const dx = ai.fx - aj.fx, dy = ai.fy - aj.fy, dz = ai.fz - aj.fz;
+          dists.push({ mj, d: dx*dx + dy*dy + dz*dz });
+        }
+        dists.sort((a, b) => a.d - b.d);
+
+        for (let k = 0; k < K; k++) {
+          const mj  = dists[k].mj;
+          const key = Math.min(mi, mj) * 1000 + Math.max(mi, mj);
+          if (drawn.has(key)) continue;
+          drawn.add(key);
+
+          // Closest nucleus pair between mi and mj
+          let bestD2 = Infinity, pi = null, pj = null;
+          for (const ma of meshes) {
+            if (ma.userData.minterId !== mi) continue;
+            for (const mb of meshes) {
+              if (mb.userData.minterId !== mj) continue;
+              const d2 = ma.position.distanceToSquared(mb.position);
+              if (d2 < bestD2) { bestD2 = d2; pi = ma.position; pj = mb.position; }
+            }
+          }
+          if (!pi) continue;
+          const idx = intraIdx[mi];
+          const { buf } = intraLinesList[mi];
+          buf[idx*6+0]=pi.x; buf[idx*6+1]=pi.y; buf[idx*6+2]=pi.z;
+          buf[idx*6+3]=pj.x; buf[idx*6+4]=pj.y; buf[idx*6+5]=pj.z;
+          intraIdx[mi]++;
+        }
+
+        // Intra-cluster: each nucleus connects to its nearest neighbour within the same minter
+        const cluster = meshes.filter(m => m.userData.minterId === mi);
+        for (const ma of cluster) {
+          let bestD2 = Infinity, nearest = null;
+          for (const mb of cluster) {
+            if (mb === ma) continue;
+            const d2 = ma.position.distanceToSquared(mb.position);
+            if (d2 < bestD2) { bestD2 = d2; nearest = mb; }
+          }
+          if (!nearest) continue;
+          const ikey = ma.userData.globalIdx * 10000 + nearest.userData.globalIdx;
+          if (drawn.has(ikey)) continue;
+          drawn.add(ikey);
+          const idx = intraIdx[mi];
+          const { buf } = intraLinesList[mi];
+          buf[idx*6+0]=ma.position.x; buf[idx*6+1]=ma.position.y; buf[idx*6+2]=ma.position.z;
+          buf[idx*6+3]=nearest.position.x; buf[idx*6+4]=nearest.position.y; buf[idx*6+5]=nearest.position.z;
+          intraIdx[mi]++;
+        }
+      }
+
+      intraLinesList.forEach(({ geo }, i) => {
+        geo.attributes.instanceStart.data.needsUpdate = true;
+        geo.instanceCount = intraIdx[i];
+      });
+    }
+
+    // ─── Post-processing ───────────────────────────────────────────────────────
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.3, 0.95, 0.35   // strength 0.3, threshold 0.35 — subtle glow only
+    );
+    composer.addPass(bloomPass);
+
+    // ─── Resize ────────────────────────────────────────────────────────────────
+
+    window.addEventListener('resize', () => {
+      const w = window.innerWidth, h = window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      composer.setSize(w, h);
+      const res = new THREE.Vector2(w, h);
+      intraLinesList.forEach(({ mat }) => mat.resolution.copy(res));
+      interLinesLS.material.resolution.copy(res);
+      activeRings.forEach(({ mat }) => mat.resolution.copy(res));
+    });
+
+    // ─── Dev panel ─────────────────────────────────────────────────────────────
+
+    const minterList = document.getElementById('minter-list');
+
+    function renderMinterRows() {
+      renderMinterTable();
+      if (!minterList) return;
+      minters.forEach((minter, idx) => {
+        const row = document.createElement('div');
+        row.className = 'minter-row';
+
+        const dot = document.createElement('div');
+        dot.className = 'minter-dot';
+        dot.style.background = PALETTE[minter.colorIdx].hex;
+
+        const label = document.createElement('span');
+        label.className = 'minter-label';
+        label.textContent = PALETTE[minter.colorIdx].name.split(' ')[0];
+
+        const decBtn = document.createElement('button');
+        decBtn.className = 'dp-btn';
+        decBtn.textContent = '−';
+        decBtn.addEventListener('click', async () => {
+          minter.count = Math.max(1, minter.count - 1);
+          rebuildAll();
+          renderMinterRows();
+          await playMinterChain(idx, minter);
+        });
+
+        const countEl = document.createElement('span');
+        countEl.className = 'minter-count';
+        countEl.textContent = minter.count;
+
+        const incBtn = document.createElement('button');
+        incBtn.className = 'dp-btn';
+        incBtn.textContent = '+';
+        incBtn.addEventListener('click', async () => {
+          minter.count = Math.min(CFG.MAX_MINTS_PER_MINTER, minter.count + 1);
+          rebuildAll();
+          renderMinterRows();
+          await playMinterChain(idx, minter);
+        });
+
+        row.appendChild(dot);
+        row.appendChild(label);
+        row.appendChild(decBtn);
+        row.appendChild(countEl);
+        row.appendChild(incBtn);
+        minterList.appendChild(row);
+      });
+    }
+
+    const minterTable = document.getElementById('minter-table');
+    minterTable.addEventListener('pointerdown', (e) => e.stopPropagation());
+    minterTable.addEventListener('pointerup',   (e) => e.stopPropagation());
+
+    const mtRows  = document.getElementById('mt-rows');
+    const mtStats = document.getElementById('mt-stats');
+
+    function renderMinterTable() {
+      mtRows.innerHTML = '';
+      const totalMints = minters.reduce((s, m) => s + m.count, 0);
+      mtStats.textContent = `${minters.length} collectors  ·  ${totalMints} minted`;
+
+      minters.forEach((minter, i) => {
+        const accent = PALETTE[minter.colorIdx].hex;
+        // symbol: user-chosen 3-char string set at mint time (falls back to first 3 hex chars)
+        const raw    = minter.address.replace('0x', '').replace('···', '');
+        const symbol = (minter.symbol || raw.slice(0, 3)).toUpperCase();
+
+        const cell = document.createElement('div');
+        cell.className = 'mt-cell';
+        cell.style.setProperty('--accent', accent);
+        // Parse hex to rgba for active state (avoids color-mix browser support issues)
+        const r = parseInt(accent.slice(1,3),16), g = parseInt(accent.slice(3,5),16), b = parseInt(accent.slice(5,7),16);
+        cell.style.setProperty('--accent-dim', `rgba(${r},${g},${b},0.15)`);
+        cell.style.setProperty('--accent-mid', `rgba(${r},${g},${b},0.45)`);
+
+        cell.innerHTML = `
+          <div class="mt-cell-num">${String(i + 1).padStart(2, '0')}</div>
+          <div class="mt-cell-symbol">${symbol}</div>
+          <div class="mt-cell-addr">${minter.address}</div>
+          <div class="mt-cell-minted">×${minter.count}</div>
+        `;
+        cell.style.cursor = 'pointer';
+        cell.addEventListener('pointerdown', (e) => e.stopPropagation());
+        cell.addEventListener('pointerup',   (e) => e.stopPropagation());
+        cell.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await toggleVoice(i);
+        });
+        mtRows.appendChild(cell);
+      });
+    }
+
+    function syncTableActive() {
+      const cells = mtRows.querySelectorAll('.mt-cell');
+      cells.forEach((cell, i) => {
+        cell.classList.toggle('is-active', nucleusVoices.has(i));
+      });
+    }
+
+    let nextColorIdx = 0;
+
+    // Single source of truth for starting/stopping a cluster voice
+    async function toggleVoice(minterId) {
+      if (nucleusVoices.has(minterId)) {
+        nucleusVoices.delete(minterId);
+        dismissLabel(minterId);   // dismissLabel calls syncTableActive
+      } else {
+        if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); }
+        const minter = minters[minterId];
+        if (!minter) return;
+        if (nucleusBoopNode) {
+          nucleusVoices.set(minterId, {
+            phrase:     birthSong(minter.address, minter.count),
+            stepIdx:    0, activeIdx: -1,
+            cycleCount: 0,
+            nextStepAt: audioCtx.currentTime + 0.05,
+          });
+        }
+        if (showLabels) showMinterLabel(minterId, minter);  // syncTableActive called here, voice already in map
+        else syncTableActive();
+      }
+    }
+
+    async function playMinterChain(minterId, minter) {
+      await toggleVoice(minterId);
+    }
+
+    const btnScaffold = document.getElementById('btn-scaffold');
+    btnScaffold.addEventListener('click', () => {
+      showScaffold = !showScaffold;
+      btnScaffold.classList.toggle('is-off', !showScaffold);
+      nucleiGroup.visible = showScaffold;
+      intraLinesList.forEach(({ ls }, mi) => { ls.visible = showScaffold && nucleusVoices.has(mi); });
+    });
+
+    const btnTable = document.getElementById('btn-table');
+    let showTable = true;
+    btnTable.addEventListener('click', () => {
+      showTable = !showTable;
+      btnTable.classList.toggle('is-off', !showTable);
+      minterTable.style.display = showTable ? '' : 'none';
+    });
+
+    let showLabels = true;
+    const btnLabels = document.getElementById('btn-labels');
+    btnLabels.addEventListener('click', () => {
+      showLabels = !showLabels;
+      btnLabels.classList.toggle('is-off', !showLabels);
+      if (!showLabels) activeLabels.forEach((_, id) => dismissLabel(id));
+    });
+
+
+    // ─── Initial build — populate from chain ──────────────────────────────────
+
+    rebuildAll(); // start with empty orb while RPC loads
+
+    fetchOnChainMinters().then(onChainMinters => {
+      if (onChainMinters.length > 0) {
+        onChainMinters.forEach(m => {
+          minters.push({
+            count:    m.count,
+            colorIdx: m.colorIdx,
+            material: makeMinterMaterial(m.colorIdx),
+            address:  m.address,
+            mintedAt: m.mintedAt
+          });
+        });
+        renderMinterRows();
+        rebuildAll();
+      }
+      // if 0 tokens on chain, orb stays empty — correct state
+    });
+
+    // ─── Web Audio ─────────────────────────────────────────────────────────────
+
+    let audioCtx = null, audioMuted = true, analyserNode = null;
+    let nucleusBoopNode = null, nucleusBoopGain = null;
+    let audioReady = false, audioMasterGain = null;
+    let audioRMS = 0;
+    const waveData = new Uint8Array(512);
+    let scaffoldAngle = 0;
+    let gyroAngle     = 0;
+    let gyroSpeed     = 0.4;
+    const soundBtn = document.getElementById('sound-btn');
+
+    let lightMode = false;
+    document.getElementById('btn-exposure').addEventListener('click', () => {
+      lightMode = !lightMode;
+      const btn = document.getElementById('btn-exposure');
+      if (lightMode) {
+        scene.background = new THREE.Color(0xf0f0ee);
+        document.body.style.background = '#f0f0ee';
+        document.getElementById('bg-grid').setAttribute('data-mode', 'light');
+        document.body.classList.add('light-mode');
+        rimBaseColor.set(0x111111);
+        orbMaterial.blending = THREE.NormalBlending;
+        orbMaterial.needsUpdate = true;
+        orbMaterial.uniforms.rippleMono.value = 1.0;
+        bloomPass.enabled = false;
+        btn.style.color      = '#000';
+        btn.style.border     = '1px solid #000';
+        btn.style.background = 'rgba(240,240,238,0.8)';
+      } else {
+        scene.background = new THREE.CanvasTexture(bgCanvas);
+        document.body.style.background = '#000';
+        document.getElementById('bg-grid').setAttribute('data-mode', 'dark');
+        document.body.classList.remove('light-mode');
+        rimBaseColor.set(0x00e5ff);
+        orbMaterial.blending = THREE.AdditiveBlending;
+        orbMaterial.needsUpdate = true;
+        orbMaterial.uniforms.rippleMono.value = 0.0;
+        bloomPass.enabled = true;
+        btn.style.color      = '#AEEA00';
+        btn.style.border     = '1px solid #AEEA00';
+        btn.style.background = 'rgba(0,0,0,0.6)';
+      }
+    });
+
+    function downloadFilename(ext) {
+      const d = new Date();
+      const date = d.toISOString().slice(0, 10);
+      const time = d.toTimeString().slice(0, 8).replace(/:/g, '-');
+      return `CONNECTIONS+INTERCONNECTIONS_${date}_${time}.${ext}`;
+    }
+
+    function capturePNG() {
+      composer.render();
+      const prevMinH = document.body.style.minHeight;
+      document.body.style.minHeight = window.innerHeight + 'px';
+      html2canvas(document.body, {
+        useCORS: true, allowTaint: true, backgroundColor: null,
+        x: 0, y: window.scrollY,
+        width: window.innerWidth, height: window.innerHeight,
+        windowWidth: window.innerWidth, windowHeight: window.innerHeight,
+      }).then(canvas => {
+        document.body.style.minHeight = prevMinH;
+        canvas.toBlob(blob => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = downloadFilename('webp');
+          a.click();
+          URL.revokeObjectURL(a.href);
+        }, 'image/webp', 0.92);
+      });
+    }
+
+    document.getElementById('btn-glb-corner').addEventListener('click', () => exportGLB());
+    document.getElementById('btn-png-corner').addEventListener('click', () => capturePNG());
+
+    async function initAudio() {
+      if (audioCtx) return;
+      audioCtx = new AudioContext();
+      try {
+        const masterGain = audioCtx.createGain();
+        masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+        masterGain.gain.linearRampToValueAtTime(0.7, audioCtx.currentTime + 4.0);
+        masterGain.connect(audioCtx.destination);
+        audioMasterGain = masterGain;
+
+        const compressor = audioCtx.createDynamicsCompressor();
+        compressor.threshold.value = -18; compressor.ratio.value = 6;
+        compressor.connect(masterGain);
+
+        const makeDelay = (time, fb) => {
+          const d = audioCtx.createDelay(1.0); d.delayTime.value = time;
+          const f = audioCtx.createGain(); f.gain.value = fb;
+          d.connect(f); f.connect(d); return d;
+        };
+        const d1 = makeDelay(0.18, 0.35), d2 = makeDelay(0.27, 0.35);
+        const rev = audioCtx.createGain(); rev.gain.value = 0.4;
+        d1.connect(rev); d2.connect(rev); rev.connect(compressor);
+
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 512;
+        analyserNode.connect(compressor);
+
+        // Nucleus boop synth — routes through delay+compressor
+        try {
+          const blob    = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+          const blobURL = URL.createObjectURL(blob);
+          await audioCtx.audioWorklet.addModule(blobURL);
+          URL.revokeObjectURL(blobURL);
+
+          nucleusBoopNode = new AudioWorkletNode(audioCtx, 'nucleus-boop');
+          const boopGain = audioCtx.createGain();
+          boopGain.gain.value = 0.8;
+          nucleusBoopGain = boopGain;
+          nucleusBoopNode.connect(boopGain);
+          boopGain.connect(analyserNode);
+          boopGain.connect(d1);
+          boopGain.connect(d2);
+        } catch (_) { nucleusBoopNode = null; }
+
+        audioReady = true;
+        audioCtx.resume();
+      } catch (e) { audioCtx = null; }
+    }
+
+    function updateSoundBtn() {
+      const waves = document.getElementById('sound-waves');
+      const mute  = document.getElementById('mute-line');
+      if (audioMuted) { waves.setAttribute('display','none'); mute.removeAttribute('display'); }
+      else            { waves.removeAttribute('display');     mute.setAttribute('display','none'); }
+    }
+
+    soundBtn.addEventListener('click', async () => {
+      if (!audioCtx) { await initAudio(); audioCtx.suspend(); audioMuted = true; updateSoundBtn(); return; }
+      audioMuted = !audioMuted;
+      audioMuted ? audioCtx.suspend() : audioCtx.resume();
+      updateSoundBtn();
+    });
+
+    // ─── Autoplay ─────────────────────────────────────────────────────────────
+    let autoplayActive = false, autoplayTimer = null;
+
+    async function autoplayStep() {
+      if (!autoplayActive) return;
+      // Stop all currently playing voices
+      for (const id of [...nucleusVoices.keys()]) {
+        nucleusVoices.delete(id);
+        if (id !== zoomedMinterId) dismissLabel(id); // keep zoom alive through autoplay
+      }
+      // Pick 1–5 random clusters (capped by minter count)
+      const count = Math.min(minters.length, 1 + Math.floor(Math.random() * 5));
+      const shuffled = minters.map((_, i) => i).sort(() => Math.random() - 0.5).slice(0, count);
+      for (const id of shuffled) await toggleVoice(id);
+      // Wait 8–12s — long enough for a 12-note chain to complete
+      const wait = 8000 + Math.random() * 4000;
+      autoplayTimer = setTimeout(autoplayStep, wait);
+    }
+
+    document.getElementById('btn-autoplay').addEventListener('click', async () => {
+      autoplayActive = !autoplayActive;
+      const btn  = document.getElementById('btn-autoplay');
+      const play = document.getElementById('autoplay-play');
+      const stop = document.getElementById('autoplay-stop');
+      if (autoplayActive) {
+        btn.classList.add('is-playing');
+        play.setAttribute('display', 'none');
+        stop.removeAttribute('display');
+        if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); }
+        autoplayStep();
+      } else {
+        btn.classList.remove('is-playing');
+        play.removeAttribute('display');
+        stop.setAttribute('display', 'none');
+        clearTimeout(autoplayTimer); autoplayTimer = null;
+      }
+    });
+
+    // ─── Interaction ───────────────────────────────────────────────────────────
+
+    let pulseStartTime = -999;
+    const PULSE_DURATION = 2.5;
+    let tapOrigin = { x: 0, y: 0 };
+    let isHolding = false;
+    let lastTapTime = 0;
+    let tapLfoRate  = 0.4;  // resting heartbeat ~0.4 Hz
+    let holdTimer  = null, holdRemoveInterval = null;
+    let rippleStartTime = -10.0;
+    const rippleTapPos  = new THREE.Vector3();
+
+    // ─── Nucleus click — raycaster + wallet info overlay ───────────────────────
+
+    const raycaster  = new THREE.Raycaster();
+    const ndcPointer = new THREE.Vector2();
+    const labelSvg   = document.getElementById('label-svg');
+    const activeLabels = new Map(); // minterId → { el, path, timer }
+    const LABEL_W = 170, EDGE_PAD = window.innerWidth < 600 ? 10 : 110, LABEL_HALF_H = 40, BEND_R = 20;
+    const HORIZ = window.innerWidth < 600 ? 34 : 64;
+
+    // ─── Label zoom state ──────────────────────────────────────────────────────
+    let zoomedMinterId = null;
+    let camLerp = null; // { toPos, toLook, onComplete }
+    const savedCamPos    = new THREE.Vector3();
+    const savedCamTarget = new THREE.Vector3();
+    const ZOOM_DIST       = 0.8;
+    const ZOOM_LERP_SPEED = 0.07;
+    const ZOOM_SNAP_DIST  = 0.005;
+
+    function resizeLabelSvg() {
+      labelSvg.setAttribute('width',  window.innerWidth);
+      labelSvg.setAttribute('height', window.innerHeight);
+    }
+    resizeLabelSvg();
+    window.addEventListener('resize', resizeLabelSvg);
+
+function showMinterLabel(minterId, minter) {
+      dismissLabel(minterId, true); // remove existing DOM only — preserve zoom state
+      const accent = PALETTE[minter.colorIdx].hex;
+      const el = document.createElement('div');
+      el.className = 'ni-label';
+      el.style.setProperty('--accent', accent);
+      // Parse hex → rgba for active state CSS vars (same pattern as table cells)
+      const r = parseInt(accent.slice(1,3),16), g = parseInt(accent.slice(3,5),16), b = parseInt(accent.slice(5,7),16);
+      el.style.setProperty('--accent-dim', `rgba(${r},${g},${b},0.35)`);
+      el.style.setProperty('--accent-mid', `rgba(${r},${g},${b},0.9)`);
+      const addrShort = `${minter.address.slice(0,6)}···${minter.address.slice(-4)}`;
+      el.innerHTML = `
+        <div class="ni-row">
+          <div class="ni-dot" style="background:${accent}"></div>
+          <span class="ni-address" data-short="${addrShort}" data-full="${minter.address}">${addrShort}</span>
+        </div>
+        <div class="ni-date">${formatMintDate(minter.mintedAt)}</div>
+        <div class="ni-count">${minter.count} mint${minter.count !== 1 ? 's' : ''}</div>`;
+      document.body.appendChild(el);
+
+      // Prevent label taps from bubbling to the world pointerup handler
+      el.addEventListener('pointerdown', e => e.stopPropagation());
+      el.addEventListener('pointerup',   e => e.stopPropagation());
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        if (zoomedMinterId === minterId) {
+          unzoomClump();
+        } else {
+          // If zoomed into a different label, snap back immediately before zooming here
+          if (zoomedMinterId !== null) {
+            const prevData = activeLabels.get(zoomedMinterId);
+            if (prevData) { prevData.el.classList.remove('ni-active'); prevData.el.style.background = ''; }
+            camera.position.copy(savedCamPos);
+            controls.target.copy(savedCamTarget);
+            controls.enabled = true;
+            zoomedMinterId = null;
+            camLerp = null;
+          }
+          zoomToClump(minterId);
+        }
+      });
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', accent);
+      path.setAttribute('stroke-width', '1.5');
+      path.setAttribute('opacity', '0.75');
+      labelSvg.appendChild(path);
+
+      // If this minter is currently zoomed, re-apply active state on the fresh element
+      const isZoomed = minterId === zoomedMinterId;
+      let timer;
+      if (isZoomed) {
+        el.classList.add('ni-active');
+        el.style.background = `rgba(${r},${g},${b},0.4)`;
+        const addrElZ = el.querySelector('.ni-address');
+        if (addrElZ) addrElZ.textContent = addrElZ.dataset.full;
+        timer = null; // zoom exempts from auto-dismiss
+      } else {
+        timer = null; // voice dies naturally after phrase.length cycles — animLoop handles cleanup
+      }
+      activeLabels.set(minterId, { el, path, timer, minterId });
+      syncTableActive();
+    }
+
+    function dismissLabel(minterId, preserveZoom = false) {
+      // Reset camera unless caller is just refreshing the label (e.g. showMinterLabel, voice end)
+      if (!preserveZoom && zoomedMinterId === minterId) {
+        camera.position.copy(savedCamPos);
+        controls.target.copy(savedCamTarget);
+        controls.enabled = true;
+        zoomedMinterId = null;
+        camLerp = null;
+      }
+      const label = activeLabels.get(minterId);
+      if (!label) return;
+      clearTimeout(label.timer);
+      label.el.remove();
+      label.path.remove();
+      activeLabels.delete(minterId);
+      syncTableActive();
+    }
+
+    function dismissAllLabels() {
+      for (const id of [...activeLabels.keys()]) dismissLabel(id);
+    }
+
+    function zoomToClump(minterId) {
+      // Compute clump world position (average of its nucleus meshes)
+      const clumpMeshes = nucleiMeshes.filter(m => m.userData.minterId === minterId);
+      if (!clumpMeshes.length) return;
+      const clumpPos = new THREE.Vector3();
+      clumpMeshes.forEach(m => { const wp = new THREE.Vector3(); m.getWorldPosition(wp); clumpPos.add(wp); });
+      clumpPos.divideScalar(clumpMeshes.length);
+
+      // Save current camera state, then aim from current direction at ZOOM_DIST
+      savedCamPos.copy(camera.position);
+      savedCamTarget.copy(controls.target);
+      const dir = camera.position.clone().sub(clumpPos).normalize();
+      const targetPos = clumpPos.clone().addScaledVector(dir, ZOOM_DIST);
+
+      zoomedMinterId = minterId;
+      controls.enabled = false;
+
+      // Pause the auto-dismiss timer while zoomed; set background directly (CSS var can be unreliable)
+      const labelData = activeLabels.get(minterId);
+      if (labelData) {
+        clearTimeout(labelData.timer);
+        labelData.timer = null;
+        const accent = PALETTE[minters[minterId].colorIdx].hex;
+        const r = parseInt(accent.slice(1,3),16), g = parseInt(accent.slice(3,5),16), b = parseInt(accent.slice(5,7),16);
+        labelData.el.classList.add('ni-active');
+        labelData.el.style.background = `rgba(${r},${g},${b},0.4)`;
+        const addrEl = labelData.el.querySelector('.ni-address');
+        if (addrEl) addrEl.textContent = addrEl.dataset.full;
+      }
+
+      camLerp = {
+        toPos: targetPos,
+        toLook: clumpPos,
+        onComplete: null, // controls stay disabled — tracking drives camera while zoomed
+      };
+    }
+
+    function unzoomClump() {
+      if (zoomedMinterId === null) return;
+      const minterId = zoomedMinterId;
+
+      const labelData = activeLabels.get(minterId);
+      if (labelData) {
+        labelData.el.classList.remove('ni-active');
+        labelData.el.style.background = '';
+        const addrEl = labelData.el.querySelector('.ni-address');
+        if (addrEl) addrEl.textContent = addrEl.dataset.short;
+        clearTimeout(labelData.timer);
+        labelData.timer = null; // voice continues naturally after unzoom
+      }
+
+      zoomedMinterId = null;
+      controls.enabled = false; // keep locked during lerp back
+
+      camLerp = {
+        toPos: savedCamPos.clone(),
+        toLook: savedCamTarget.clone(),
+        onComplete: () => {
+          controls.enabled = true;
+          // Resync OrbitControls internal spherical state from the restored position
+          // without applying any stale damping velocity
+          const wasDamping = controls.enableDamping;
+          controls.enableDamping = false;
+          controls.update();
+          controls.enableDamping = wasDamping;
+        },
+      };
+    }
+
+    function updateLabels() {
+      if (!activeLabels.size) return;
+      const vh = window.innerHeight;
+      const _tmpV = new THREE.Vector3();
+
+      // ── Step 1: find screen-Y range of ALL minter anchors (scaffold bounds)
+      let scaffMinY = Infinity, scaffMaxY = -Infinity;
+      minters.forEach((_, mi) => {
+        const a = calcMinterAnchor(mi, minters.length);
+        const wp = fieldToWorld(a.fx, a.fy, a.fz, baseBlobScale);
+        const ndc = new THREE.Vector3(wp.x, wp.y, wp.z).project(camera);
+        const sy = (-ndc.y * 0.5 + 0.5) * vh;
+        if (sy < scaffMinY) scaffMinY = sy;
+        if (sy > scaffMaxY) scaffMaxY = sy;
+      });
+      const scaffRange = Math.max(1, scaffMaxY - scaffMinY);
+      const TOP_PAD = LABEL_HALF_H, BOT_PAD = LABEL_HALF_H;
+
+      for (const [minterId, label] of activeLabels) {
+        // ── Zoomed label: freeze position, hide cable to avoid flicker
+        if (minterId === zoomedMinterId) {
+          label.path.setAttribute('opacity', '0');
+          continue;
+        }
+        label.path.setAttribute('opacity', '0.75');
+
+        // ── Average world pos of this clump's nuclei
+        const clumpMeshes = nucleiMeshes.filter(m => m.userData.minterId === minterId);
+        if (!clumpMeshes.length) continue;
+        _tmpV.set(0, 0, 0);
+        clumpMeshes.forEach(m => { const wp = new THREE.Vector3(); m.getWorldPosition(wp); _tmpV.add(wp); });
+        _tmpV.divideScalar(clumpMeshes.length);
+
+        // ── Project clump to screen
+        const ndc = _tmpV.clone().project(camera);
+        const cx = ( ndc.x * 0.5 + 0.5) * window.innerWidth;
+        const cy = (-ndc.y * 0.5 + 0.5) * vh;
+
+        // ── Remap clump screen-Y from scaffold range → full viewport (issue 1)
+        // t clamped to [0,1] so single-minter drift can't send label off screen
+        const t      = Math.max(0, Math.min(1, (cy - scaffMinY) / scaffRange));
+        const labelY = TOP_PAD + t * (vh - TOP_PAD - BOT_PAD);
+
+        const onLeft = cx < window.innerWidth / 2;
+        if (onLeft) {
+          label.el.className = 'ni-label ni-left';
+          label.el.style.left  = EDGE_PAD + 'px';
+          label.el.style.right = '';
+        } else {
+          label.el.className = 'ni-label ni-right';
+          label.el.style.right = EDGE_PAD + 'px';
+          label.el.style.left  = '';
+        }
+        label.el.style.top = labelY + 'px';
+
+        // ── Cable: horizontal segment → short rounded bend → straight line to clump
+        let pathD;
+        if (onLeft) {
+          const lx = EDGE_PAD + LABEL_W;  // label right edge
+          const sx = lx + HORIZ;          // elbow corner
+          // Direction from elbow to clump
+          const ddx = cx - sx, ddy = cy - labelY;
+          const d   = Math.sqrt(ddx*ddx + ddy*ddy) || 1;
+          const r   = Math.min(BEND_R, d * 0.4);
+          // Rounded corner: back up r px along incoming (horizontal), forward r px along outgoing
+          const bx  = sx + (ddx/d) * r, by = labelY + (ddy/d) * r;
+          pathD = `M ${lx},${labelY} L ${sx-r},${labelY} Q ${sx},${labelY} ${bx},${by} L ${cx},${cy}`;
+        } else {
+          const lx = window.innerWidth - EDGE_PAD - LABEL_W;  // label left edge
+          const sx = lx - HORIZ;
+          const ddx = cx - sx, ddy = cy - labelY;
+          const d   = Math.sqrt(ddx*ddx + ddy*ddy) || 1;
+          const r   = Math.min(BEND_R, d * 0.4);
+          const bx  = sx + (ddx/d) * r, by = labelY + (ddy/d) * r;
+          pathD = `M ${lx},${labelY} L ${sx+r},${labelY} Q ${sx},${labelY} ${bx},${by} L ${cx},${cy}`;
+        }
+        label.path.setAttribute('d', pathD);
+      }
+    }
+
+    window.addEventListener('pointerdown', (e) => {
+      tapOrigin = { x: e.clientX, y: e.clientY };
+      isHolding = false;
+      holdTimer = setTimeout(() => {
+        isHolding = true;
+        // Remove last added cluster immediately, then one more every 800ms
+        const removeOne = () => {
+          if (nucleusVoices.size === 0) { clearInterval(holdRemoveInterval); holdRemoveInterval = null; return; }
+          const minterId = [...nucleusVoices.keys()].at(-1);
+          nucleusVoices.delete(minterId);
+          dismissLabel(minterId);
+        };
+        removeOne();
+        holdRemoveInterval = setInterval(removeOne, 800);
+      }, 300);
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (holdTimer === null) return;
+      const dx = e.clientX - tapOrigin.x, dy = e.clientY - tapOrigin.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 6) {
+        clearTimeout(holdTimer); holdTimer = null; isHolding = false;
+      }
+    });
+
+    window.addEventListener('pointerup', async (e) => {
+      clearTimeout(holdTimer); holdTimer = null;
+      clearInterval(holdRemoveInterval); holdRemoveInterval = null;
+      const wasHolding = isHolding;
+      isHolding = false;
+
+      if (wasHolding) return;
+
+      const dx = e.clientX - tapOrigin.x, dy = e.clientY - tapOrigin.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 6) return;
+      if (e.target.closest && e.target.closest('#minter-table')) return;
+      if (e.target.closest && e.target.closest('.ui-element')) return;
+      if (e.target.closest && e.target.closest('.ni-label')) return;
+
+      // Raycast against nucleus meshes — direct tap on a nucleus still toggles it
+      ndcPointer.x = (e.clientX / window.innerWidth)  *  2 - 1;
+      ndcPointer.y = (e.clientY / window.innerHeight)  * -2 + 1;
+      raycaster.setFromCamera(ndcPointer, camera);
+      const hits = raycaster.intersectObjects(nucleiMeshes);
+      if (hits.length > 0) {
+        await toggleVoice(hits[0].object.userData.minterId);
+        return;
+      }
+
+      // Tap on empty space — add one random silent cluster
+      if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); }
+      const silent = minters.map((m, i) => i).filter(i => !nucleusVoices.has(i));
+      if (silent.length > 0) {
+        await toggleVoice(silent[Math.floor(Math.random() * silent.length)]);
+      }
+      pulseStartTime = clock.getElapsedTime();
+      const blobHits = raycaster.intersectObject(blobMesh);
+      rippleTapPos.copy(blobHits.length > 0 ? blobHits[0].point : new THREE.Vector3(0, 0, baseBlobScale * 0.9));
+      rippleStartTime = clock.getElapsedTime();
+    });
+
+    // ─── Animation Loop ────────────────────────────────────────────────────────
+
+    const clock = new THREE.Clock();
+    let lastFrameMs = performance.now(), fpsSmooth = 60;
+    let _lastFrameTime = 0, _frameCount = 0, _lastVoiceKey = '';
+
+    function animLoop(ts) {
+      if (ts - _lastFrameTime < 33.3) return; // 30fps cap
+      _lastFrameTime = ts;
+      _frameCount++;
+      const t = clock.getElapsedTime();
+
+      // — Pulse —
+      const sinceClick = t - pulseStartTime;
+      const pulseBoost = sinceClick < PULSE_DURATION ? 3.8 * Math.exp(-sinceClick * 3.2) : 0;
+
+      // — Animate nuclei: cluster drifts as unit, individual jitter reduced —
+      const animFP = nucleiBasePositions.map((b, i) => {
+        const minterId = nucleiMeshes[i].userData.minterId;
+        const cd = getMinterClusterDrift(minterId, t);
+        const o  = getNucleusAnimOffset(i, t);
+        return {
+          fx: Math.max(0.05, Math.min(0.95, b.fx + cd.dx + o.dx * 0.25)),
+          fy: Math.max(0.05, Math.min(0.95, b.fy + cd.dy + o.dy * 0.25)),
+          fz: Math.max(0.05, Math.min(0.95, b.fz + cd.dz + o.dz * 0.25)),
+        };
+      });
+
+      // — Active voice emissive feedback — saturate only the currently sounding nucleus
+      // Reset all nuclei to their base palette emissive
+      nucleiMeshes.forEach(mesh => {
+        const c = new THREE.Color(PALETTE[minters[mesh.userData.minterId].colorIdx].hex);
+        const hsl = {};
+        c.getHSL(hsl);
+        // Light mode: greyscale inactive nuclei (dark on white)
+        mesh.material.emissive.setHSL(hsl.h, lightMode ? 0.0 : 0.5, lightMode ? 0.15 : hsl.l);
+        mesh.material.color.setHSL(hsl.h,    lightMode ? 0.0 : hsl.s, lightMode ? 0.15 : hsl.l);
+        mesh.material.emissiveIntensity = lightMode ? 0.0 : 0.3;
+        mesh.material.opacity = 0.85;
+      });
+      // Restore full saturation on the active nucleus per playing voice
+      let _offset = 0;
+      minters.forEach((minter, mi) => {
+        const voice = nucleusVoices.get(mi);
+        if (voice && voice.activeIdx >= 0) {
+          const meshIdx = _offset + (voice.activeIdx % minter.count);
+          const m = nucleiMeshes[meshIdx];
+          if (m) {
+            const c = new THREE.Color(PALETTE[minter.colorIdx].hex);
+            const hsl = {};
+            c.getHSL(hsl);
+            m.material.emissive.setHSL(hsl.h, 1.0, hsl.l);
+            m.material.color.setHSL(hsl.h, 1.0, hsl.l);
+            m.material.emissiveIntensity = lightMode ? 0.8 : 0.5;
+          }
+        }
+        _offset += minter.count;
+      });
+
+      // — Update nucleus mesh world positions — counter-rotate scaffold on X axis (gyroscope)
+      const cosN = Math.cos(scaffoldAngle), sinN = Math.sin(scaffoldAngle);
+      animFP.forEach((fp, i) => {
+        const wp = fieldToWorld(fp.fx, fp.fy, fp.fz, baseBlobScale);
+        // rotate around X axis
+        const ry = wp.y * cosN - wp.z * sinN;
+        const rz = wp.y * sinN + wp.z * cosN;
+        nucleiMeshes[i].position.set(wp.x, ry, rz);
+        nucleiMeshes[i].rotation.y += 0.004 * (0.5 + seededRandom(i * 3));
+        nucleiMeshes[i].rotation.x += 0.002 * seededRandom(i * 3 + 1);
+      });
+
+      // — Active rings — only on the nucleus currently sounding its note
+      const _activeNuclei = new Set();
+      let _rOff = 0;
+      minters.forEach((minter, mi) => {
+        const voice = nucleusVoices.get(mi);
+        if (voice && voice.activeIdx >= 0) {
+          const idx = _rOff + (voice.activeIdx % minter.count);
+          if (nucleiMeshes[idx]) _activeNuclei.add(nucleiMeshes[idx]);
+        }
+        _rOff += minter.count;
+      });
+      activeRings.forEach(({ ring, mesh }) => {
+        ring.position.copy(mesh.position);
+        ring.lookAt(camera.position);
+        ring.visible = showScaffold && _activeNuclei.has(mesh);
+      });
+
+      // — Connector lines — only recompute on voice change or every 3rd frame
+      const _voiceKey = [...nucleusVoices.keys()].sort().join(',');
+      if (_voiceKey !== _lastVoiceKey || (_frameCount % 3 === 0 && nucleusVoices.size > 0)) {
+        updateConnectorLines(nucleiMeshes);
+        _lastVoiceKey = _voiceKey;
+      }
+      intraLinesList.forEach(({ ls }, mi) => {
+        ls.visible = showScaffold && nucleusVoices.has(mi) && zoomedMinterId === null;
+      });
+      interLinesLS.visible = false;
+
+      // — Blob: central ball dominant + nucleus contributions (inverse-scaled to prevent splitting) —
+      const total      = totalCount();
+      const bStr       = getBlobStrength(Math.max(1, total));
+      const blobScale  = baseBlobScale;
+      const scaleFactor = Math.max(0, (blobScale - CFG.SCALE_BASE) / Math.max(0.001, CFG.SCALE_MAX - CFG.SCALE_BASE));
+      blobMesh.scale.setScalar(blobScale);
+
+      // — Nucleus voice tick — advance phrase step sequencer each frame
+      if (audioCtx && nucleusBoopNode && !audioMuted && nucleusVoices.size > 0) {
+        const now          = audioCtx.currentTime;
+        const stepInterval = 1.0 / (tapLfoRate * 4);
+        for (const [minterId, voice] of nucleusVoices) {
+          if (now >= voice.nextStepAt) {
+            if (voice.dying) {
+              nucleusVoices.delete(minterId);
+              if (minterId !== zoomedMinterId) dismissLabel(minterId); // keep zoom alive after sound ends
+              continue;
+            }
+            const step = voice.phrase[voice.stepIdx];
+            if (!step.isRest) {
+              const maxCycles = voice.phrase.length;
+              const fadeGain = 1.0 - voice.cycleCount / maxCycles;
+              nucleusBoopNode.port.postMessage({ trigger: {
+                freq:     step.freq,
+                attackMs: step.attackMs || 20,
+                decayMs:  step.decayMs,
+                gain:     fadeGain * 0.7,
+                type:     step.type || 'sine',
+              }});
+            }
+            voice.activeIdx   = voice.stepIdx;
+            voice.nextStepAt += stepInterval * step.stepLen;
+            voice.stepIdx++;
+            if (voice.stepIdx >= voice.phrase.length) {
+              voice.stepIdx = 0;
+              voice.cycleCount++;
+              if (voice.cycleCount >= voice.phrase.length) voice.dying = true;
+            }
+          }
+        }
+      }
+
+      // — Audio RMS — sampled every frame, drives blob visuals
+      if (analyserNode && !audioMuted) {
+        analyserNode.getByteTimeDomainData(waveData);
+        let sum = 0;
+        for (let i = 0; i < waveData.length; i++) { const v = (waveData[i] / 128.0) - 1.0; sum += v * v; }
+        audioRMS = Math.sqrt(sum / waveData.length);
+      } else { audioRMS *= 0.92; }
+
+      blobMesh.reset();
+      const audioBreath = 1.0 + audioRMS * 3.5;
+      // Weak central cohesion — holds the blob together but doesn't dominate the shape
+      const centralStr  = bStr * (0.5 + audioBreath * 0.2 + 0.1 * Math.sin(t * 2.1));
+      const subtractVal = CFG.BLOB_SUBTRACT;
+      blobMesh.addBall(0.5, 0.5, 0.5, centralStr, subtractVal);
+
+      // 4 Lissajous balls always run — organic base shape from v6.
+      // Fade out gradually as nuclei accumulate past ~12.
+      const lissajousStr = bStr * 0.85 * Math.max(0, 1 - total / 12);
+      if (lissajousStr > 0.01) {
+        const cosG = Math.cos(gyroAngle), sinG = Math.sin(gyroAngle);
+        for (let i = 0; i < 4; i++) {
+          const phi = phaseOffsets[i], speed = 0.3 + i * 0.07;
+          const r   = 0.12 + 0.04 * Math.sin(t * 1.1 + phi);
+          const lx  = r * Math.cos(t * speed + phi);
+          const lz  = r * Math.sin(t * speed * 0.5 + phi + 2.0);
+          blobMesh.addBall(
+            0.5 + lx * cosG - lz * sinG,
+            0.5 + r * Math.sin(t * speed * 0.7 + phi + 1.0),
+            0.5 + lx * sinG + lz * cosG,
+            lissajousStr, subtractVal
+          );
+        }
+      }
+
+      if (total > 0) {
+        // Each nucleus pushes a bump outward to the blob surface in its direction from centre.
+        // Multiple nuclei in the same direction stack into a bigger lobe — the surface
+        // follows the living constellation rather than averaging into a sphere.
+        const surfStrBase = bStr * 1.2 / Math.max(1, Math.sqrt(total * 0.3));
+        animFP.forEach((fp, i) => {
+          const dx = fp.fx - 0.5, dy = fp.fy - 0.5, dz = fp.fz - 0.5;
+          const len = Math.sqrt(dx*dx + dy*dy + dz*dz);
+          if (len < 0.04) return;
+          const ndx = dx/len, ndy = dy/len, ndz = dz/len;
+
+          // Two axes perpendicular to nucleus direction — used for lateral flow
+          const ax = Math.abs(ndx) < 0.9 ? 1 : 0, az = Math.abs(ndx) < 0.9 ? 0 : 1;
+          const p1x = ndy*az - ndz*0, p1y = ndz*ax - ndx*az, p1z = ndx*0 - ndy*ax;
+          const p1l = Math.sqrt(p1x*p1x + p1y*p1y + p1z*p1z) || 1;
+          const t1x = p1x/p1l, t1y = p1y/p1l, t1z = p1z/p1l;
+          const t2x = ndy*t1z - ndz*t1y, t2y = ndz*t1x - ndx*t1z, t2z = ndx*t1y - ndy*t1x;
+
+          // Lateral drift — each nucleus flows at its own rate, irrational offset so no sync
+          const flow = t * 0.35 + i * 1.13;
+          const amt  = 0.07;
+          const bx = ndx + t1x * Math.cos(flow) * amt + t2x * Math.sin(flow * 0.71) * amt;
+          const by = ndy + t1y * Math.cos(flow) * amt + t2y * Math.sin(flow * 0.71) * amt;
+          const bz = ndz + t1z * Math.cos(flow) * amt + t2z * Math.sin(flow * 0.71) * amt;
+          const bl = Math.sqrt(bx*bx + by*by + bz*bz) || 1;
+
+          // surfR sweeps 0.18–0.30 — nuclei at the high end poke out through the surface
+          const surfR = 0.24 + 0.06 * Math.sin(t * 0.6 + i * 0.53);
+          const str   = surfStrBase * (0.75 + 0.35 * Math.sin(t * 0.8 + i * 0.71));
+          blobMesh.addBall(
+            0.5 + (bx/bl) * surfR,
+            0.5 + (by/bl) * surfR,
+            0.5 + (bz/bl) * surfR,
+            str, subtractVal
+          );
+        });
+      }
+
+
+      blobMesh.update();
+      // — Gyroscope — membrane spins Y, scaffold counter-spins X (v17 pattern)
+      gyroAngle    += gyroSpeed * 0.005;
+      scaffoldAngle = -gyroAngle;
+      blobMesh.rotation.y += gyroSpeed * 0.003;
+      gyroSpeed     = 0.4 + (nucleusVoices.size / Math.max(1, minters.length)) * 3.6;
+
+      // — Rim: heartbeat + minter colour tint + click flare —
+      const baseRim = lightMode
+        ? 1 + 0.3 * Math.sin(t * 5.0) * Math.sin(t * 0.8)
+        : 0.65 + 0.2 * Math.sin(t * 5.0) * Math.sin(t * 0.8);
+      orbMaterial.uniforms.rimIntensity.value = baseRim;
+      orbMaterial.uniforms.rimPower.value = lightMode ? 2 : 3.0;
+      orbMaterial.uniforms.rimColor.value
+        .copy(rimBaseColor)
+        .lerp(rimExhaleColor, isHolding ? 0.6 : 0);
+      if (!lightMode) {
+        bloomPass.enabled  = true;
+        bloomPass.strength = Math.max(0.15, 0.35 - totalCount() * 0.002);
+      }
+
+      // — Ripple uniforms —
+      const rippleAge = t - rippleStartTime;
+      orbMaterial.uniforms.rippleCenter.value.copy(rippleTapPos);
+      orbMaterial.uniforms.rippleTime.value    = rippleAge;
+      orbMaterial.uniforms.rippleStrength.value = Math.max(0, 1.0 - rippleAge * 0.85);
+
+      // — FPS —
+      const now = performance.now();
+      fpsSmooth = Math.round(0.9 * fpsSmooth + 0.1 * (1000 / (now - lastFrameMs)));
+      lastFrameMs = now;
+
+      // — Label zoom lerp + clump tracking —
+      // controls.update() is skipped entirely while zoomed — it rewrites camera.position
+      // from its internal spherical state even when disabled, causing drift.
+      if (camLerp) {
+        // While zooming IN, chase the live clump so there's no jolt when tracking starts
+        if (zoomedMinterId !== null) {
+          const zc = nucleiMeshes.filter(m => m.userData.minterId === zoomedMinterId);
+          if (zc.length) {
+            const livePos = new THREE.Vector3();
+            zc.forEach(m => livePos.add(m.position));
+            livePos.divideScalar(zc.length);
+            camLerp.toLook.copy(livePos);
+            const dir = camera.position.clone().sub(livePos).normalize();
+            camLerp.toPos.copy(livePos).addScaledVector(dir, ZOOM_DIST);
+          }
+        }
+        camera.position.lerp(camLerp.toPos, ZOOM_LERP_SPEED);
+        controls.target.lerp(camLerp.toLook, ZOOM_LERP_SPEED);
+        camera.lookAt(controls.target);
+        if (camera.position.distanceTo(camLerp.toPos) < ZOOM_SNAP_DIST) {
+          camera.position.copy(camLerp.toPos);
+          controls.target.copy(camLerp.toLook);
+          camera.lookAt(controls.target);
+          const cb = camLerp.onComplete;
+          camLerp = null;
+          if (cb) cb();
+        }
+      } else if (zoomedMinterId !== null) {
+        // Settled zoom: track clump as the centre of the universe each frame
+        const zClumpMeshes = nucleiMeshes.filter(m => m.userData.minterId === zoomedMinterId);
+        if (zClumpMeshes.length) {
+          const zClumpPos = new THREE.Vector3();
+          zClumpMeshes.forEach(m => zClumpPos.add(m.position));
+          zClumpPos.divideScalar(zClumpMeshes.length);
+          const delta = zClumpPos.clone().sub(controls.target);
+          camera.position.add(delta);
+          controls.target.copy(zClumpPos);
+          camera.lookAt(zClumpPos);
+        }
+      } else {
+        controls.update(); // normal orbit — only runs when not zoomed
+      }
+      updateLabels();
+      composer.render();
+    }
+
+    renderer.setAnimationLoop(animLoop);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        renderer.setAnimationLoop(null);
+      } else {
+        _lastFrameTime = 0;
+        renderer.setAnimationLoop(animLoop);
+      }
+    });
+  </script>
+</body>
+</html>
