@@ -195,7 +195,7 @@
       display: flex; flex-wrap: wrap; gap: 4px;
     }
     .mt-cell {
-      width: 64px; height: 64px;
+      width: 106px; height: 64px;
       border: 0.5px solid rgba(255,255,255,0.08);
       display: flex; flex-direction: column;
       justify-content: space-between;
@@ -754,6 +754,7 @@ registerProcessor('nucleus-boop', NucleusBoopProcessor);
     // ─── Contract — Sepolia testnet ───────────────────────────────────────────
     const CONTRACT_ADDRESS = '0x63B2ec82BaB8A5e70889E7B32Ab2CC28FAFBB9De';
     const SEPOLIA_RPC      = 'https://ethereum-sepolia-rpc.publicnode.com';
+    const MAINNET_RPC      = 'https://eth.llamarpc.com';
     const CONTRACT_ABI     = [
       'function getAllTokens() view returns (uint256[] tokenIds, address[] owners, uint8[] colorIndices, uint256[] mintTimestamps)'
     ];
@@ -783,6 +784,19 @@ registerProcessor('nucleus-boop', NucleusBoopProcessor);
         console.warn('[orb] RPC fetch failed:', e);
         return [];
       }
+    }
+
+    // ─── ENS resolution — mainnet provider, runs after getAllTokens ──────────
+    async function resolveENSNames(minterList) {
+      const mainnetProvider = new ethers.JsonRpcProvider(MAINNET_RPC);
+      await Promise.all(minterList.map(async m => {
+        try {
+          const name = await mainnetProvider.lookupAddress(m.address);
+          m.ensName = name || null;
+        } catch {
+          m.ensName = null;
+        }
+      }));
     }
 
     // ─── Stub mintedAt dates — 7-day window, seeded spacing ───────────────────
@@ -1326,7 +1340,9 @@ registerProcessor('nucleus-boop', NucleusBoopProcessor);
         const accent = PALETTE[minter.colorIdx].hex;
         // symbol: user-chosen 3-char string set at mint time (falls back to first 3 hex chars)
         const raw    = minter.address.replace('0x', '').replace('···', '');
-        const symbol = (minter.symbol || raw.slice(0, 3)).toUpperCase();
+        const symbol = minter.ensName
+          ? minter.ensName.replace('.eth','').slice(0, 5).toUpperCase()
+          : (minter.symbol || raw.slice(0, 5)).toUpperCase();
 
         const cell = document.createElement('div');
         cell.className = 'mt-cell';
@@ -1339,7 +1355,7 @@ registerProcessor('nucleus-boop', NucleusBoopProcessor);
         cell.innerHTML = `
           <div class="mt-cell-num">${String(i + 1).padStart(2, '0')}</div>
           <div class="mt-cell-symbol">${symbol}</div>
-          <div class="mt-cell-addr">${minter.address}</div>
+          <div class="mt-cell-addr">${minter.ensName || minter.address}</div>
           <div class="mt-cell-minted">×${minter.count}</div>
         `;
         cell.style.cursor = 'pointer';
@@ -1417,15 +1433,17 @@ registerProcessor('nucleus-boop', NucleusBoopProcessor);
 
     rebuildAll(); // start with empty orb while RPC loads
 
-    fetchOnChainMinters().then(onChainMinters => {
+    fetchOnChainMinters().then(async onChainMinters => {
       if (onChainMinters.length > 0) {
+        await resolveENSNames(onChainMinters);
         onChainMinters.forEach(m => {
           minters.push({
             count:    m.count,
             colorIdx: m.colorIdx,
             material: makeMinterMaterial(m.colorIdx),
             address:  m.address,
-            mintedAt: m.mintedAt
+            mintedAt: m.mintedAt,
+            ensName:  m.ensName
           });
         });
         renderMinterRows();
@@ -1659,10 +1677,11 @@ function showMinterLabel(minterId, minter) {
       el.style.setProperty('--accent-dim', `rgba(${r},${g},${b},0.35)`);
       el.style.setProperty('--accent-mid', `rgba(${r},${g},${b},0.9)`);
       const addrShort = `${minter.address.slice(0,6)}···${minter.address.slice(-4)}`;
+      const labelShort = minter.ensName || addrShort;
       el.innerHTML = `
         <div class="ni-row">
           <div class="ni-dot" style="background:${accent}"></div>
-          <span class="ni-address" data-short="${addrShort}" data-full="${minter.address}">${addrShort}</span>
+          <span class="ni-address" data-short="${labelShort}" data-full="${minter.address}">${labelShort}</span>
         </div>
         <div class="ni-date">${formatMintDate(minter.mintedAt)}</div>
         <div class="ni-count">${minter.count} mint${minter.count !== 1 ? 's' : ''}</div>`;
