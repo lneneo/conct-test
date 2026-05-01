@@ -837,7 +837,7 @@ const PALETTE = [
       const batchSize = 3;
       for (let i = 0; i < needsLookup.length; i += batchSize) {
         const batch = needsLookup.slice(i, i + batchSize);
-        await Promise.all(batch.map(async (m) => {
+        await Promise.allSettled(batch.map(async (m) => {
           try {
             const name = await provider.lookupAddress(m.address);
             if (name) {
