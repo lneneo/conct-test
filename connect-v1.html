@@ -427,7 +427,7 @@ registerProcessor('nucleus-boop', NucleusBoopProcessor);
       MAX_MINTS_PER_MINTER: 200,   // ← max times a single minter can mint
     };
 
-    // ─── Colour palette — 49 minter colours (cycles if more minters than colours) ─
+    // ─── Colour palette — 50 minter colours (cycles if more minters than colours) ─
 
 const PALETTE = [
   { name: 'Crimson Glow',        hex: '#FF5252' },
@@ -481,8 +481,6 @@ const PALETTE = [
   { name: 'Dusty Rose',          hex: '#F48FB1' },
   { name: 'Electric Red',        hex: '#FF1744' },
 ];
-
-
 
 
     // ─── Renderer ──────────────────────────────────────────────────────────────
@@ -763,7 +761,10 @@ const PALETTE = [
 
     async function fetchOnChainMinters() {
       try {
-        const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
+        // Pass network explicitly — prevents ethers v6 from calling eth_chainId
+        // via postMessage (which throws DataCloneError: Headers object could not be cloned)
+        const sepoliaNetwork = new ethers.Network('sepolia', 11155111);
+        const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC, sepoliaNetwork, { staticNetwork: sepoliaNetwork });
         const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
         const [tokenIds, owners, colorIndices, mintTimestamps] = await contract.getAllTokens();
 
@@ -788,17 +789,49 @@ const PALETTE = [
       }
     }
 
-    // ─── ENS resolution — mainnet provider, runs after getAllTokens ──────────
+    // ─── ENS resolution — mainnet only, sequential with delay to avoid rate limits ──
+    // ENS reverse lookup always uses Ethereum mainnet regardless of contract network.
+    const ENS_RPCS = [
+      'https://eth.llamarpc.com',
+      'https://ethereum-rpc.publicnode.com',
+      'https://rpc.ankr.com/eth',
+    ];
+
     async function resolveENSNames(minterList) {
-      const mainnetProvider = new ethers.JsonRpcProvider(MAINNET_RPC);
-      await Promise.all(minterList.map(async m => {
+      // Try each RPC in order — stop at first that works for at least one lookup
+      let provider = null;
+      const mainnetNetwork = new ethers.Network('mainnet', 1);
+      for (const rpc of ENS_RPCS) {
         try {
-          const name = await mainnetProvider.lookupAddress(m.address);
+          const p = new ethers.JsonRpcProvider(rpc, mainnetNetwork, { staticNetwork: mainnetNetwork });
+          // Warm up — test with a known ENS address (vitalik.eth) to confirm RPC is live
+          await p.lookupAddress('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045');
+          provider = p;
+          console.log('[ENS] using RPC:', rpc);
+          break;
+        } catch {
+          console.warn('[ENS] RPC failed, trying next:', rpc);
+        }
+      }
+
+      if (!provider) {
+        console.warn('[ENS] all RPCs failed — ENS names will not display');
+        minterList.forEach(m => { m.ensName = null; });
+        return;
+      }
+
+      // Sequential with small delay — avoids hammering the RPC with 20+ parallel requests
+      for (const m of minterList) {
+        try {
+          const name = await provider.lookupAddress(m.address);
           m.ensName = name || null;
+          if (name) console.log('[ENS]', m.address, '→', name);
         } catch {
           m.ensName = null;
         }
-      }));
+        // 80ms between requests — well under rate limits, ~1.6s total for 20 minters
+        await new Promise(r => setTimeout(r, 80));
+      }
     }
 
     // ─── Stub mintedAt dates — 7-day window, seeded spacing ───────────────────
