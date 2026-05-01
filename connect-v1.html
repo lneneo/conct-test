@@ -793,8 +793,10 @@ const PALETTE = [
     // ENS reverse lookup always uses Ethereum mainnet regardless of contract network.
     const ENS_RPCS = [
       'https://eth.llamarpc.com',
-      'https://ethereum-rpc.publicnode.com',
       'https://rpc.ankr.com/eth',
+      'https://cloudflare-eth.com',
+      'https://eth-mainnet.public.blastapi.io',
+      'https://1rpc.io/eth',
     ];
 
     async function resolveENSNames(minterList) {
@@ -807,8 +809,12 @@ const PALETTE = [
 
       for (const rpc of ENS_RPCS) {
         try {
-          provider = new ethers.JsonRpcProvider(rpc, mainnetNetwork, { staticNetwork: true });
-          await provider.getBlockNumber();
+          const p = new ethers.JsonRpcProvider(rpc, mainnetNetwork, { staticNetwork: true });
+          await Promise.race([
+            p.getBlockNumber(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+          ]);
+          provider = p;
           console.log('[ENS] using RPC:', rpc);
           break;
         } catch (e) {
@@ -852,6 +858,7 @@ const PALETTE = [
               }
             } else {
               m.ensName = null;
+              cache[m.address.toLowerCase()] = { name: null, timestamp: now };
             }
             cache[m.address.toLowerCase()] = { name: m.ensName, timestamp: now };
           } catch (err) {
