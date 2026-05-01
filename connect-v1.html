@@ -798,15 +798,20 @@ const PALETTE = [
     ];
 
     async function resolveENSNames(minterList) {
-      // Try each RPC in order — stop at first that works for at least one lookup
+      const CACHE_KEY = 'hml_ens_cache';
+      const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+      const now = Date.now();
+      const ONE_WEEK = 604800000;
       let provider = null;
-      const mainnetNetwork = new ethers.Network('mainnet', 1);
+      const mainnetNetwork = ethers.Network.from(1);
+
       for (const rpc of ENS_RPCS) {
         try {
-          provider = new ethers.JsonRpcProvider(rpc, mainnetNetwork, { staticNetwork: mainnetNetwork });
+          provider = new ethers.JsonRpcProvider(rpc, mainnetNetwork, { staticNetwork: true });
+          await provider.getBlockNumber();
           console.log('[ENS] using RPC:', rpc);
           break;
-        } catch {
+        } catch (e) {
           console.warn('[ENS] RPC failed, trying next:', rpc);
           provider = null;
         }
@@ -818,18 +823,48 @@ const PALETTE = [
         return;
       }
 
-      // Sequential with small delay — avoids hammering the RPC with 20+ parallel requests
-      for (const m of minterList) {
-        try {
-          const name = await provider.lookupAddress(m.address);
-          m.ensName = name || null;
-          if (name) console.log('[ENS]', m.address, '→', name);
-        } catch {
-          m.ensName = null;
+      // Apply cached names immediately, collect addresses that need a fresh lookup
+      const needsLookup = minterList.filter(m => {
+        const entry = cache[m.address.toLowerCase()];
+        if (entry && (now - entry.timestamp < ONE_WEEK)) {
+          m.ensName = entry.name;
+          return false;
         }
-        // 80ms between requests — well under rate limits, ~1.6s total for 20 minters
-        await new Promise(r => setTimeout(r, 80));
+        return true;
+      });
+
+      // Process in batches of 3 — faster than sequential, safe under rate limits
+      const batchSize = 3;
+      for (let i = 0; i < needsLookup.length; i += batchSize) {
+        const batch = needsLookup.slice(i, i + batchSize);
+        await Promise.all(batch.map(async (m) => {
+          try {
+            const name = await provider.lookupAddress(m.address);
+            if (name) {
+              // Forward-confirm the name resolves back to this address
+              const resolver = await provider.getResolver(name);
+              const resolvedAddr = await resolver?.getAddress();
+              if (resolvedAddr?.toLowerCase() === m.address.toLowerCase()) {
+                m.ensName = name;
+                console.log('[ENS]', m.address, '→', name);
+              } else {
+                m.ensName = null;
+              }
+            } else {
+              m.ensName = null;
+            }
+            cache[m.address.toLowerCase()] = { name: m.ensName, timestamp: now };
+          } catch (err) {
+            console.warn('[ENS] lookup failed for', m.address, err.message);
+            m.ensName = null;
+          }
+        }));
+        if (i + batchSize < needsLookup.length) {
+          await new Promise(r => setTimeout(r, 200));
+        }
       }
+
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
     }
 
     // ─── Stub mintedAt dates — 7-day window, seeded spacing ───────────────────
