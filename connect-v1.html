@@ -803,14 +803,12 @@ const PALETTE = [
       const mainnetNetwork = new ethers.Network('mainnet', 1);
       for (const rpc of ENS_RPCS) {
         try {
-          const p = new ethers.JsonRpcProvider(rpc, mainnetNetwork, { staticNetwork: mainnetNetwork });
-          // Warm up — test with a known ENS address (vitalik.eth) to confirm RPC is live
-          await p.lookupAddress('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045');
-          provider = p;
+          provider = new ethers.JsonRpcProvider(rpc, mainnetNetwork, { staticNetwork: mainnetNetwork });
           console.log('[ENS] using RPC:', rpc);
           break;
         } catch {
           console.warn('[ENS] RPC failed, trying next:', rpc);
+          provider = null;
         }
       }
 
