@@ -1756,7 +1756,7 @@ function showMinterLabel(minterId, minter) {
       el.innerHTML = `
         <div class="ni-row">
           <div class="ni-dot" style="background:${accent}"></div>
-          <span class="ni-address" data-short="${labelShort}" data-full="${minter.address}">${labelShort}</span>
+          <span class="ni-address" data-short="${labelShort}" data-full="${minter.ensName || minter.address}">${labelShort}</span>
         </div>
         <div class="ni-date">${formatMintDate(minter.mintedAt)}</div>
         <div class="ni-count">${minter.count} mint${minter.count !== 1 ? 's' : ''}</div>`;
