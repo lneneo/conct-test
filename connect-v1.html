@@ -1803,7 +1803,7 @@ function showMinterLabel(minterId, minter) {
       } else {
         timer = null; // voice dies naturally after phrase.length cycles — animLoop handles cleanup
       }
-      activeLabels.set(minterId, { el, path, timer, minterId });
+      activeLabels.set(minterId, { el, path, timer, minterId, minShowUntil: Date.now() + 3000 });
       syncTableActive();
     }
 
@@ -1877,7 +1877,11 @@ function showMinterLabel(minterId, minter) {
         const addrEl = labelData.el.querySelector('.ni-address');
         if (addrEl) addrEl.textContent = addrEl.dataset.short;
         clearTimeout(labelData.timer);
-        labelData.timer = null; // voice continues naturally after unzoom
+        if (nucleusVoices.has(minterId)) {
+          labelData.timer = null; // voice still alive — animLoop handles cleanup
+        } else {
+          labelData.timer = setTimeout(() => dismissLabel(minterId), 1500); // voice already gone — schedule dismiss
+        }
       }
 
       zoomedMinterId = null;
@@ -2152,6 +2156,8 @@ function showMinterLabel(minterId, minter) {
         for (const [minterId, voice] of nucleusVoices) {
           if (now >= voice.nextStepAt) {
             if (voice.dying) {
+              const labelData = activeLabels.get(minterId);
+              if (labelData && Date.now() < labelData.minShowUntil) continue; // hold until min display time
               nucleusVoices.delete(minterId);
               if (minterId !== zoomedMinterId) dismissLabel(minterId); // keep zoom alive after sound ends
               continue;
