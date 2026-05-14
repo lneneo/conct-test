@@ -229,6 +229,10 @@
       font-size: 7px; opacity: 0.5; letter-spacing: 0.08em;
       text-transform: uppercase;
     }
+    .mt-cell-secondary {
+      font-size: 7px; opacity: 0.4; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--accent);
+    }
     .mt-cell.is-active {
       background: var(--accent-dim);
       border-color: var(--accent-mid);
@@ -264,6 +268,10 @@
     .ni-label.ni-active { width: 333px; }
     .ni-label.ni-active .ni-date  { opacity: 0.65; }
     .ni-label.ni-active .ni-count { opacity: 0.75; }
+    .ni-label .ni-history         { margin-top: 4px; }
+    .ni-label .ni-history-row     { font-size: 10px; opacity: 0.4; letter-spacing: 0.04em; display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; }
+    .ni-label .ni-hist-type       { opacity: 0.55; font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .ni-label.ni-active .ni-history-row { opacity: 0.65; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.11.1/dist/ethers.umd.min.js"></script>
@@ -752,11 +760,12 @@ const PALETTE = [
     }
 
     // ─── Contract — Sepolia testnet ───────────────────────────────────────────
-    const CONTRACT_ADDRESS = '0x63B2ec82BaB8A5e70889E7B32Ab2CC28FAFBB9De';
+    const CONTRACT_ADDRESS = '0xFbf2168dA2F7c47DB2F0db099876343004777964';
     const SEPOLIA_RPC      = 'https://ethereum-sepolia-rpc.publicnode.com';
     const MAINNET_RPC      = 'https://eth.llamarpc.com';
+    // ⚠️ Update CONTRACT_ADDRESS after deploying timer contract to Sepolia
     const CONTRACT_ABI     = [
-      'function getAllTokens() view returns (uint256[] tokenIds, address[] owners, uint8[] colorIndices, uint256[] mintTimestamps)'
+      'function getAllTokens() view returns (uint256[] tokenIds, address[] owners, uint8[] colorIndices, uint256[] mintTimestamps, uint256[] collectTimestamps)'
     ];
 
     async function fetchOnChainMinters() {
@@ -766,21 +775,29 @@ const PALETTE = [
         const sepoliaNetwork = new ethers.Network('sepolia', 11155111);
         const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC, sepoliaNetwork, { staticNetwork: sepoliaNetwork });
         const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-        const [tokenIds, owners, colorIndices, mintTimestamps] = await contract.getAllTokens();
+        const [tokenIds, owners, colorIndices, mintTimestamps, collectTimestamps] = await contract.getAllTokens();
 
-        // Group tokens by owner address — each unique owner = one minter on the orb
+        // Group tokens by owner — each unique owner = one cluster on the orb
+        // Each token carries its own mintedAt (birthday) and collectedAt (when this owner got it)
         const minterMap = new Map();
         for (let i = 0; i < tokenIds.length; i++) {
-          const addr = owners[i].toLowerCase();
+          const addr      = owners[i].toLowerCase();
+          const mintedMs  = Number(mintTimestamps[i])    * 1000;
+          const collectMs = Number(collectTimestamps[i]) * 1000;
           if (!minterMap.has(addr)) {
             minterMap.set(addr, {
-              address: owners[i],
+              address:  owners[i],
               colorIdx: Number(colorIndices[i]),
-              mintedAt: Number(mintTimestamps[i]) * 1000, // contract uses seconds, orb uses ms
-              count:    0
+              mintedAt: mintedMs,   // earliest mint in this wallet (for backwards compat)
+              tokens:   [],
+              count:    0,
             });
           }
-          minterMap.get(addr).count++;
+          const entry = minterMap.get(addr);
+          entry.tokens.push({ mintedAt: mintedMs, collectedAt: collectMs });
+          entry.count++;
+          // Keep mintedAt as the earliest token birthday across all tokens
+          if (mintedMs < entry.mintedAt) entry.mintedAt = mintedMs;
         }
         return Array.from(minterMap.values());
       } catch (e) {
@@ -892,6 +909,30 @@ const PALETTE = [
       const hh = String(d.getHours()).padStart(2,'0');
       const mm = String(d.getMinutes()).padStart(2,'0');
       return `${dd} ${M[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
+    }
+
+    function formatDateOnly(ts) {
+      const d  = new Date(ts);
+      const M  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${String(d.getDate()).padStart(2,'0')} ${M[d.getMonth()]} ${d.getFullYear()}`;
+    }
+
+    // Returns sorted array of { dateStr, count, type: 'minted'|'collected' }
+    // Original holders: collectedAt == mintedAt → type 'minted'
+    // Secondary holders: collectedAt != mintedAt → type 'collected'
+    function buildDateHistory(tokens) {
+      if (!tokens || tokens.length === 0) return [];
+      const groups = new Map(); // key: "dateStr|type" → { dateStr, count, type, ts }
+      for (const tok of tokens) {
+        const isOriginal = tok.collectedAt === tok.mintedAt;
+        const ts         = isOriginal ? tok.mintedAt : tok.collectedAt;
+        const type       = isOriginal ? 'minted' : 'collected';
+        const dateStr    = formatDateOnly(ts);
+        const key        = `${dateStr}|${type}`;
+        if (!groups.has(key)) groups.set(key, { dateStr, count: 0, type, ts });
+        groups.get(key).count++;
+      }
+      return [...groups.values()].sort((a, b) => a.ts - b.ts);
     }
 
     // ─── Fresnel shaders (unchanged from v6) ───────────────────────────────────
@@ -1427,11 +1468,12 @@ const PALETTE = [
         cell.style.setProperty('--accent-dim', `rgba(${r},${g},${b},0.15)`);
         cell.style.setProperty('--accent-mid', `rgba(${r},${g},${b},0.45)`);
 
+        const hasSecondary = minter.tokens && minter.tokens.some(t => t.collectedAt !== t.mintedAt);
         cell.innerHTML = `
           <div class="mt-cell-num">${String(i + 1).padStart(2, '0')}</div>
           <div class="mt-cell-symbol">${symbol}</div>
           <div class="mt-cell-addr">${minter.ensName || minter.address}</div>
-          <div class="mt-cell-minted">×${minter.count}</div>
+          <div class="mt-cell-minted">×${minter.count}${hasSecondary ? ' <span class="mt-cell-secondary">⇄</span>' : ''}</div>
         `;
         cell.style.cursor = 'pointer';
         cell.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -1518,6 +1560,7 @@ const PALETTE = [
             material: makeMinterMaterial(m.colorIdx),
             address:  m.address,
             mintedAt: m.mintedAt,
+            tokens:   m.tokens,
             ensName:  m.ensName
           });
         });
@@ -1753,13 +1796,22 @@ function showMinterLabel(minterId, minter) {
       el.style.setProperty('--accent-mid', `rgba(${r},${g},${b},0.9)`);
       const addrShort = `${minter.address.slice(0,6)}···${minter.address.slice(-4)}`;
       const labelShort = minter.ensName || addrShort;
+      const history     = buildDateHistory(minter.tokens || []);
+      const historyHTML = history.length > 0
+        ? `<div class="ni-history">${history.map(h =>
+            `<div class="ni-history-row">
+               <span>${h.dateStr}</span>
+               <span><span class="ni-hist-type">${h.type}</span> ×${h.count}</span>
+             </div>`).join('')}</div>`
+        : `<div class="ni-date">${formatMintDate(minter.mintedAt)}</div>`;
+
       el.innerHTML = `
         <div class="ni-row">
           <div class="ni-dot" style="background:${accent}"></div>
           <span class="ni-address" data-short="${labelShort}" data-full="${minter.ensName || minter.address}">${labelShort}</span>
         </div>
-        <div class="ni-date">${formatMintDate(minter.mintedAt)}</div>
-        <div class="ni-count">${minter.count} mint${minter.count !== 1 ? 's' : ''}</div>`;
+        ${historyHTML}
+        <div class="ni-count">${minter.count} token${minter.count !== 1 ? 's' : ''}</div>`;
       document.body.appendChild(el);
 
       // Prevent label taps from bubbling to the world pointerup handler
