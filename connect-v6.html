@@ -760,64 +760,55 @@ const PALETTE = [
     }
 
     // ─── Contract — Sepolia testnet ───────────────────────────────────────────
-    // ⚠️ At mainnet launch: update CONTRACT_ADDRESS, switch CONTRACT_NETWORK to mainnet (1),
-    //    and swap CONTRACT_RPCS to mainnet Alchemy + mainnet public fallbacks.
-    const CONTRACT_ADDRESS  = '0xFbf2168dA2F7c47DB2F0db099876343004777964';
-    const CONTRACT_NETWORK  = new ethers.Network('sepolia', 11155111);
-    const CONTRACT_RPCS     = [
-      'https://ethereum-sepolia-rpc.publicnode.com',
-      'https://rpc.ankr.com/eth_sepolia',
-    ];
-    // ⚠️ At mainnet launch swap CONTRACT_RPCS to mainnet public nodes and update CONTRACT_NETWORK
+    const CONTRACT_ADDRESS = '0xFbf2168dA2F7c47DB2F0db099876343004777964';
+    const SEPOLIA_RPC      = 'https://ethereum-sepolia-rpc.publicnode.com';
+    const MAINNET_RPC      = 'https://eth.llamarpc.com';
+    // ⚠️ Update CONTRACT_ADDRESS after deploying timer contract to Sepolia
     const CONTRACT_ABI     = [
       'function getAllTokens() view returns (uint256[] tokenIds, address[] owners, uint8[] colorIndices, uint256[] mintTimestamps, uint256[] collectTimestamps)'
     ];
 
     async function fetchOnChainMinters() {
-      for (const rpc of CONTRACT_RPCS) {
-        try {
-          // Pass network explicitly — prevents ethers v6 from calling eth_chainId
-          // via postMessage (which throws DataCloneError: Headers object could not be cloned)
-          const provider = new ethers.JsonRpcProvider(rpc, CONTRACT_NETWORK, { staticNetwork: CONTRACT_NETWORK });
-          const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-          const [tokenIds, owners, colorIndices, mintTimestamps, collectTimestamps] =
-            await contract.getAllTokens();
+      try {
+        // Pass network explicitly — prevents ethers v6 from calling eth_chainId
+        // via postMessage (which throws DataCloneError: Headers object could not be cloned)
+        const sepoliaNetwork = new ethers.Network('sepolia', 11155111);
+        const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC, sepoliaNetwork, { staticNetwork: sepoliaNetwork });
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+        const [tokenIds, owners, colorIndices, mintTimestamps, collectTimestamps] = await contract.getAllTokens();
 
-          // Group tokens by owner — each unique owner = one cluster on the orb
-          // Each token carries its own mintedAt (birthday) and collectedAt (when this owner got it)
-          const minterMap = new Map();
-          for (let i = 0; i < tokenIds.length; i++) {
-            const addr      = owners[i].toLowerCase();
-            const mintedMs  = Number(mintTimestamps[i])    * 1000;
-            const collectMs = Number(collectTimestamps[i]) * 1000;
-            if (!minterMap.has(addr)) {
-              minterMap.set(addr, {
-                address:  owners[i],
-                colorIdx: Number(colorIndices[i]),
-                mintedAt: mintedMs,   // earliest mint in this wallet (for backwards compat)
-                tokens:   [],
-                count:    0,
-              });
-            }
-            const entry = minterMap.get(addr);
-            entry.tokens.push({ mintedAt: mintedMs, collectedAt: collectMs });
-            entry.count++;
-            // Keep mintedAt as the earliest token birthday across all tokens
-            if (mintedMs < entry.mintedAt) entry.mintedAt = mintedMs;
+        // Group tokens by owner — each unique owner = one cluster on the orb
+        // Each token carries its own mintedAt (birthday) and collectedAt (when this owner got it)
+        const minterMap = new Map();
+        for (let i = 0; i < tokenIds.length; i++) {
+          const addr      = owners[i].toLowerCase();
+          const mintedMs  = Number(mintTimestamps[i])    * 1000;
+          const collectMs = Number(collectTimestamps[i]) * 1000;
+          if (!minterMap.has(addr)) {
+            minterMap.set(addr, {
+              address:  owners[i],
+              colorIdx: Number(colorIndices[i]),
+              mintedAt: mintedMs,   // earliest mint in this wallet (for backwards compat)
+              tokens:   [],
+              count:    0,
+            });
           }
-          return { minters: Array.from(minterMap.values()), mintStartMs };
-        } catch (e) {
-          console.warn('[orb] RPC failed, trying next:', rpc, e.message);
+          const entry = minterMap.get(addr);
+          entry.tokens.push({ mintedAt: mintedMs, collectedAt: collectMs });
+          entry.count++;
+          // Keep mintedAt as the earliest token birthday across all tokens
+          if (mintedMs < entry.mintedAt) entry.mintedAt = mintedMs;
         }
+        return Array.from(minterMap.values());
+      } catch (e) {
+        console.warn('[orb] RPC fetch failed:', e);
+        return [];
       }
-      console.warn('[orb] all RPCs failed');
-      return { minters: [], mintStartMs: 0 };
     }
 
     // ─── ENS resolution — mainnet only, sequential with delay to avoid rate limits ──
     // ENS reverse lookup always uses Ethereum mainnet regardless of contract network.
     const ENS_RPCS = [
-      'https://eth-mainnet.g.alchemy.com/v2/NEOKV9GzX7YKaz7P58hO8',
       'https://eth.llamarpc.com',
       'https://rpc.ankr.com/eth',
       'https://cloudflare-eth.com',
@@ -1559,13 +1550,7 @@ const PALETTE = [
 
     rebuildAll(); // start with empty orb while RPC loads
 
-    let _pollTimer = null;
-
-    async function refreshData() {
-      const { minters: onChainMinters, mintStartMs } = await fetchOnChainMinters();
-
-      // Clear and repopulate minters array
-      minters.length = 0;
+    fetchOnChainMinters().then(async onChainMinters => {
       if (onChainMinters.length > 0) {
         await resolveENSNames(onChainMinters);
         onChainMinters.forEach(m => {
@@ -1579,36 +1564,11 @@ const PALETTE = [
             ensName:  m.ensName
           });
         });
+        renderMinterRows();
+        rebuildAll();
       }
-      renderMinterRows();
-      rebuildAll();
-      return mintStartMs;
-    }
-
-    function schedulePoll(mintStartMs) {
-      if (_pollTimer) return; // already scheduled
-      if (!mintStartMs) return;
-      const ageDays = (Date.now() - mintStartMs) / (1000 * 60 * 60 * 24);
-      let intervalMs;
-      if (ageDays <= 30) {
-        intervalMs = 20 * 1000;            // every 20 sec for first month
-      } else if (ageDays <= 90) {
-        intervalMs = 10 * 60 * 1000;       // every 10 min, days 30-90
-      } else {
-        return;                             // >90 days — no polling
-      }
-      _pollTimer = setInterval(async () => {
-        const ms = await refreshData();
-        // Recalculate interval on each tick in case age bracket changed
-        const days = (Date.now() - ms) / (1000 * 60 * 60 * 24);
-        if (days > 90) {
-          clearInterval(_pollTimer);
-          _pollTimer = null;
-        }
-      }, intervalMs);
-    }
-
-    refreshData().then(mintStartMs => schedulePoll(mintStartMs));
+      // if 0 tokens on chain, orb stays empty — correct state
+    });
 
     // ─── Web Audio ─────────────────────────────────────────────────────────────
 
@@ -1742,34 +1702,11 @@ const PALETTE = [
       else            { waves.removeAttribute('display');     mute.setAttribute('display','none'); }
     }
 
-    function fadeOutAudio(durationSec = 3) {
-      if (!audioCtx || !audioMasterGain) return;
-      const now = audioCtx.currentTime;
-      audioMasterGain.gain.cancelScheduledValues(now);
-      audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
-      audioMasterGain.gain.linearRampToValueAtTime(0, now + durationSec);
-      setTimeout(() => { if (audioMuted) audioCtx.suspend(); }, durationSec * 1000);
-    }
-
-    function fadeInAudio(durationSec = 1) {
-      if (!audioCtx || !audioMasterGain) return;
-      audioCtx.resume();
-      const now = audioCtx.currentTime;
-      audioMasterGain.gain.cancelScheduledValues(now);
-      audioMasterGain.gain.setValueAtTime(0, now);
-      audioMasterGain.gain.linearRampToValueAtTime(0.7, now + durationSec);
-    }
-
     soundBtn.addEventListener('click', async () => {
-      if (!audioCtx) { await initAudio(); audioMuted = true; updateSoundBtn(); fadeOutAudio(0.1); return; }
+      if (!audioCtx) { await initAudio(); audioCtx.suspend(); audioMuted = true; updateSoundBtn(); return; }
       audioMuted = !audioMuted;
-      if (audioMuted) { fadeOutAudio(3); } else { fadeInAudio(1); }
+      audioMuted ? audioCtx.suspend() : audioCtx.resume();
       updateSoundBtn();
-    });
-
-    // ─── postMessage from parent — fade out when user navigates away ──────────
-    window.addEventListener('message', (e) => {
-      if (e.data && e.data.type === 'fadeOut') fadeOutAudio(e.data.duration ?? 3);
     });
 
     // ─── Autoplay ─────────────────────────────────────────────────────────────
