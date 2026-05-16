@@ -1714,6 +1714,13 @@ const PALETTE = [
 
     async function autoplayStep() {
       if (!autoplayActive) return;
+      // Restore gain smoothly in case we're resuming after a fade-out pause
+      if (audioMasterGain && audioCtx) {
+        const now = audioCtx.currentTime;
+        audioMasterGain.gain.cancelScheduledValues(now);
+        audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
+        audioMasterGain.gain.linearRampToValueAtTime(0.7, now + 0.3);
+      }
       // Stop all currently playing voices
       for (const id of [...nucleusVoices.keys()]) {
         nucleusVoices.delete(id);
@@ -1744,6 +1751,19 @@ const PALETTE = [
         play.removeAttribute('display');
         stop.setAttribute('display', 'none');
         clearTimeout(autoplayTimer); autoplayTimer = null;
+        // Fade master gain to silence over 2s, then clean up voices (no gain restore here — done on next play)
+        if (audioMasterGain && audioCtx) {
+          const now = audioCtx.currentTime;
+          audioMasterGain.gain.cancelScheduledValues(now);
+          audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
+          audioMasterGain.gain.linearRampToValueAtTime(0, now + 3.0);
+          setTimeout(() => {
+            for (const id of [...nucleusVoices.keys()]) {
+              nucleusVoices.delete(id);
+              if (id !== zoomedMinterId) dismissLabel(id);
+            }
+          }, 3100);
+        }
       }
     });
 
