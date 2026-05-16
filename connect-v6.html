@@ -1713,10 +1713,14 @@ const PALETTE = [
     function fadeOutAudio(durationSec = 3) {
       if (!audioCtx || !audioMasterGain) return;
       const now = audioCtx.currentTime;
-      audioMasterGain.gain.cancelScheduledValues(now);
-      audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
+      if (typeof audioMasterGain.gain.cancelAndHoldAtTime === 'function') {
+        audioMasterGain.gain.cancelAndHoldAtTime(now);
+      } else {
+        audioMasterGain.gain.cancelScheduledValues(now);
+        audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
+      }
       audioMasterGain.gain.linearRampToValueAtTime(0, now + durationSec);
-      setTimeout(() => { if (audioMuted) audioCtx.suspend(); }, durationSec * 1000);
+      setTimeout(() => { if (audioMuted) audioCtx.suspend(); }, (durationSec + 0.2) * 1000);
     }
 
     function fadeInAudio(durationSec = 1) {
