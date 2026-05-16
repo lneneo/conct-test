@@ -811,7 +811,7 @@ const PALETTE = [
               });
             }
             const entry = minterMap.get(addr);
-            entry.tokens.push({ mintedAt: mintedMs, collectedAt: collectMs });
+            entry.tokens.push({ mintedAt: mintedMs, collectedAt: collectMs, colorIdx: Number(colorIndices[i]) });
             entry.count++;
             // Keep mintedAt as the earliest token birthday across all tokens
             if (mintedMs < entry.mintedAt) entry.mintedAt = mintedMs;
@@ -1132,8 +1132,12 @@ const PALETTE = [
       let globalIdx = 0;
       minters.forEach((minter, minterId) => {
         for (let j = 0; j < minter.count; j++) {
-          const mesh = new THREE.Mesh(nucleusGeo, minter.material.clone());
+          const tokenColorIdx = (minter.tokens && minter.tokens[j] != null)
+            ? minter.tokens[j].colorIdx
+            : minter.colorIdx;
+          const mesh = new THREE.Mesh(nucleusGeo, makeMinterMaterial(tokenColorIdx));
           mesh.userData.minterId  = minterId;
+          mesh.userData.colorIdx  = tokenColorIdx;
           mesh.userData.globalIdx = globalIdx;
           nucleiGroup.add(mesh);
           nucleiMeshes.push(mesh);
@@ -1166,7 +1170,7 @@ const PALETTE = [
       sharedRingGeo.setPositions(ringPos);
       nucleiMeshes.forEach((mesh) => {
         const mat = new LineMaterial({
-          color: PALETTE[minters[mesh.userData.minterId].colorIdx].hex,
+          color: PALETTE[mesh.userData.colorIdx ?? minters[mesh.userData.minterId].colorIdx].hex,
           linewidth: CFG.CONNECTOR_WIDTH,
           transparent: true, opacity: 0.8, depthWrite: false,
           resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
@@ -2146,7 +2150,7 @@ function showMinterLabel(minterId, minter) {
       // — Active voice emissive feedback — saturate only the currently sounding nucleus
       // Reset all nuclei to their base palette emissive
       nucleiMeshes.forEach(mesh => {
-        const c = new THREE.Color(PALETTE[minters[mesh.userData.minterId].colorIdx].hex);
+        const c = new THREE.Color(PALETTE[mesh.userData.colorIdx ?? minters[mesh.userData.minterId].colorIdx].hex);
         const hsl = {};
         c.getHSL(hsl);
         // Light mode: greyscale inactive nuclei (dark on white)
@@ -2163,7 +2167,7 @@ function showMinterLabel(minterId, minter) {
           const meshIdx = _offset + (voice.activeIdx % minter.count);
           const m = nucleiMeshes[meshIdx];
           if (m) {
-            const c = new THREE.Color(PALETTE[minter.colorIdx].hex);
+            const c = new THREE.Color(PALETTE[m.userData.colorIdx ?? minter.colorIdx].hex);
             const hsl = {};
             c.getHSL(hsl);
             m.material.emissive.setHSL(hsl.h, 1.0, hsl.l);
