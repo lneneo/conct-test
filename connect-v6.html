@@ -1538,6 +1538,12 @@ const PALETTE = [
         dismissLabel(minterId);   // dismissLabel calls syncTableActive
       } else {
         if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); }
+        if (audioMasterGain && audioCtx) {
+          const now = audioCtx.currentTime;
+          audioMasterGain.gain.cancelScheduledValues(now);
+          audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
+          audioMasterGain.gain.linearRampToValueAtTime(0.7, now + 0.3);
+        }
         const minter = minters[minterId];
         if (!minter) return;
         if (nucleusBoopNode) {
