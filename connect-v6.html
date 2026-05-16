@@ -816,6 +816,18 @@ const PALETTE = [
             // Keep mintedAt as the earliest token birthday across all tokens
             if (mintedMs < entry.mintedAt) entry.mintedAt = mintedMs;
           }
+          // Resolve each wallet's identity color — majority among originally minted tokens,
+          // falling back to majority across all held tokens for pure secondary collectors.
+          for (const entry of minterMap.values()) {
+            const pool = entry.tokens.filter(t => t.collectedAt === t.mintedAt);
+            const source = pool.length > 0 ? pool : entry.tokens;
+            const counts = new Map();
+            for (const tok of source) counts.set(tok.colorIdx, (counts.get(tok.colorIdx) || 0) + 1);
+            let best = entry.colorIdx, bestCount = 0;
+            for (const [idx, count] of counts) { if (count > bestCount) { bestCount = count; best = idx; } }
+            entry.colorIdx = best;
+          }
+
           return Array.from(minterMap.values());
         } catch (e) {
           console.warn(`[orb] RPC failed (${rpc}), trying next:`, e.message);
@@ -1738,6 +1750,13 @@ const PALETTE = [
 
     async function autoplayStep() {
       if (!autoplayActive) return;
+      // Restore gain smoothly in case we're resuming after a fade-out pause
+      if (audioMasterGain && audioCtx) {
+        const now = audioCtx.currentTime;
+        audioMasterGain.gain.cancelScheduledValues(now);
+        audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
+        audioMasterGain.gain.linearRampToValueAtTime(0.7, now + 0.3);
+      }
       // Stop all currently playing voices
       for (const id of [...nucleusVoices.keys()]) {
         nucleusVoices.delete(id);
@@ -1768,6 +1787,19 @@ const PALETTE = [
         play.removeAttribute('display');
         stop.setAttribute('display', 'none');
         clearTimeout(autoplayTimer); autoplayTimer = null;
+        // Fade master gain to silence over 3s, then clean up voices
+        if (audioMasterGain && audioCtx) {
+          const now = audioCtx.currentTime;
+          audioMasterGain.gain.cancelScheduledValues(now);
+          audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
+          audioMasterGain.gain.linearRampToValueAtTime(0, now + 3.0);
+          setTimeout(() => {
+            for (const id of [...nucleusVoices.keys()]) {
+              nucleusVoices.delete(id);
+              if (id !== zoomedMinterId) dismissLabel(id);
+            }
+          }, 3100);
+        }
       }
     });
 
