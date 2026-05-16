@@ -1510,7 +1510,7 @@ const PALETTE = [
         nucleusVoices.delete(minterId);
         dismissLabel(minterId);   // dismissLabel calls syncTableActive
       } else {
-        if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); fadeInAudio(2); }
+        if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); }
         const minter = minters[minterId];
         if (!minter) return;
         if (nucleusBoopNode) {
@@ -1615,7 +1615,6 @@ const PALETTE = [
     let audioCtx = null, audioMuted = true, analyserNode = null;
     let nucleusBoopNode = null, nucleusBoopGain = null;
     let audioReady = false, audioMasterGain = null;
-    let gainTarget = 0;
     let audioRMS = 0;
     const waveData = new Uint8Array(512);
     let scaffoldAngle = 0;
@@ -1692,7 +1691,8 @@ const PALETTE = [
       audioCtx = new AudioContext();
       try {
         const masterGain = audioCtx.createGain();
-        masterGain.gain.value = 0;
+        masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+        masterGain.gain.linearRampToValueAtTime(0.7, audioCtx.currentTime + 4.0);
         masterGain.connect(audioCtx.destination);
         audioMasterGain = masterGain;
 
@@ -1746,9 +1746,9 @@ const PALETTE = [
       if (!audioCtx || !audioMasterGain) return;
       const now = audioCtx.currentTime;
       audioMasterGain.gain.cancelScheduledValues(now);
-      audioMasterGain.gain.setValueAtTime(gainTarget, now);
-      gainTarget = 0;
+      audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
       audioMasterGain.gain.linearRampToValueAtTime(0, now + durationSec);
+      setTimeout(() => { if (audioMuted) audioCtx.suspend(); }, durationSec * 1000);
     }
 
     function fadeInAudio(durationSec = 1) {
@@ -1756,8 +1756,7 @@ const PALETTE = [
       audioCtx.resume();
       const now = audioCtx.currentTime;
       audioMasterGain.gain.cancelScheduledValues(now);
-      audioMasterGain.gain.setValueAtTime(gainTarget, now);
-      gainTarget = 0.7;
+      audioMasterGain.gain.setValueAtTime(0, now);
       audioMasterGain.gain.linearRampToValueAtTime(0.7, now + durationSec);
     }
 
@@ -1801,7 +1800,7 @@ const PALETTE = [
         btn.classList.add('is-playing');
         play.setAttribute('display', 'none');
         stop.removeAttribute('display');
-        if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); fadeInAudio(2); }
+        if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); }
         autoplayStep();
       } else {
         btn.classList.remove('is-playing');
@@ -2148,7 +2147,7 @@ function showMinterLabel(minterId, minter) {
       }
 
       // Tap on empty space — add one random silent cluster
-      if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); fadeInAudio(2); }
+      if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); }
       const silent = minters.map((m, i) => i).filter(i => !nucleusVoices.has(i));
       if (silent.length > 0) {
         await toggleVoice(silent[Math.floor(Math.random() * silent.length)]);
