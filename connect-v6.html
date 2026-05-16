@@ -805,18 +805,19 @@ const PALETTE = [
             // Keep mintedAt as the earliest token birthday across all tokens
             if (mintedMs < entry.mintedAt) entry.mintedAt = mintedMs;
           }
-          return Array.from(minterMap.values());
+          return { minters: Array.from(minterMap.values()), mintStartMs };
         } catch (e) {
           console.warn('[orb] RPC failed, trying next:', rpc, e.message);
         }
       }
       console.warn('[orb] all RPCs failed');
-      return [];
+      return { minters: [], mintStartMs: 0 };
     }
 
     // ─── ENS resolution — mainnet only, sequential with delay to avoid rate limits ──
     // ENS reverse lookup always uses Ethereum mainnet regardless of contract network.
     const ENS_RPCS = [
+      'https://eth-mainnet.g.alchemy.com/v2/NEOKV9GzX7YKaz7P58hO8',
       'https://eth.llamarpc.com',
       'https://rpc.ankr.com/eth',
       'https://cloudflare-eth.com',
@@ -1509,7 +1510,7 @@ const PALETTE = [
         nucleusVoices.delete(minterId);
         dismissLabel(minterId);   // dismissLabel calls syncTableActive
       } else {
-        if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); }
+        if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); fadeInAudio(2); }
         const minter = minters[minterId];
         if (!minter) return;
         if (nucleusBoopNode) {
@@ -1558,7 +1559,13 @@ const PALETTE = [
 
     rebuildAll(); // start with empty orb while RPC loads
 
-    fetchOnChainMinters().then(async onChainMinters => {
+    let _pollTimer = null;
+
+    async function refreshData() {
+      const { minters: onChainMinters, mintStartMs } = await fetchOnChainMinters();
+
+      // Clear and repopulate minters array
+      minters.length = 0;
       if (onChainMinters.length > 0) {
         await resolveENSNames(onChainMinters);
         onChainMinters.forEach(m => {
@@ -1572,17 +1579,43 @@ const PALETTE = [
             ensName:  m.ensName
           });
         });
-        renderMinterRows();
-        rebuildAll();
       }
-      // if 0 tokens on chain, orb stays empty — correct state
-    });
+      renderMinterRows();
+      rebuildAll();
+      return mintStartMs;
+    }
+
+    function schedulePoll(mintStartMs) {
+      if (_pollTimer) return; // already scheduled
+      if (!mintStartMs) return;
+      const ageDays = (Date.now() - mintStartMs) / (1000 * 60 * 60 * 24);
+      let intervalMs;
+      if (ageDays <= 30) {
+        intervalMs = 20 * 1000;            // every 20 sec for first month
+      } else if (ageDays <= 90) {
+        intervalMs = 10 * 60 * 1000;       // every 10 min, days 30-90
+      } else {
+        return;                             // >90 days — no polling
+      }
+      _pollTimer = setInterval(async () => {
+        const ms = await refreshData();
+        // Recalculate interval on each tick in case age bracket changed
+        const days = (Date.now() - ms) / (1000 * 60 * 60 * 24);
+        if (days > 90) {
+          clearInterval(_pollTimer);
+          _pollTimer = null;
+        }
+      }, intervalMs);
+    }
+
+    refreshData().then(mintStartMs => schedulePoll(mintStartMs));
 
     // ─── Web Audio ─────────────────────────────────────────────────────────────
 
     let audioCtx = null, audioMuted = true, analyserNode = null;
     let nucleusBoopNode = null, nucleusBoopGain = null;
     let audioReady = false, audioMasterGain = null;
+    let gainTarget = 0;
     let audioRMS = 0;
     const waveData = new Uint8Array(512);
     let scaffoldAngle = 0;
@@ -1659,8 +1692,7 @@ const PALETTE = [
       audioCtx = new AudioContext();
       try {
         const masterGain = audioCtx.createGain();
-        masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
-        masterGain.gain.linearRampToValueAtTime(0.7, audioCtx.currentTime + 4.0);
+        masterGain.gain.value = 0;
         masterGain.connect(audioCtx.destination);
         audioMasterGain = masterGain;
 
@@ -1713,14 +1745,10 @@ const PALETTE = [
     function fadeOutAudio(durationSec = 3) {
       if (!audioCtx || !audioMasterGain) return;
       const now = audioCtx.currentTime;
-      if (typeof audioMasterGain.gain.cancelAndHoldAtTime === 'function') {
-        audioMasterGain.gain.cancelAndHoldAtTime(now);
-      } else {
-        audioMasterGain.gain.cancelScheduledValues(now);
-        audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
-      }
+      audioMasterGain.gain.cancelScheduledValues(now);
+      audioMasterGain.gain.setValueAtTime(gainTarget, now);
+      gainTarget = 0;
       audioMasterGain.gain.linearRampToValueAtTime(0, now + durationSec);
-      setTimeout(() => { if (audioMuted) audioCtx.suspend(); }, (durationSec + 0.2) * 1000);
     }
 
     function fadeInAudio(durationSec = 1) {
@@ -1728,7 +1756,8 @@ const PALETTE = [
       audioCtx.resume();
       const now = audioCtx.currentTime;
       audioMasterGain.gain.cancelScheduledValues(now);
-      audioMasterGain.gain.setValueAtTime(0, now);
+      audioMasterGain.gain.setValueAtTime(gainTarget, now);
+      gainTarget = 0.7;
       audioMasterGain.gain.linearRampToValueAtTime(0.7, now + durationSec);
     }
 
@@ -1772,7 +1801,7 @@ const PALETTE = [
         btn.classList.add('is-playing');
         play.setAttribute('display', 'none');
         stop.removeAttribute('display');
-        if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); }
+        if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); fadeInAudio(2); }
         autoplayStep();
       } else {
         btn.classList.remove('is-playing');
@@ -2119,7 +2148,7 @@ function showMinterLabel(minterId, minter) {
       }
 
       // Tap on empty space — add one random silent cluster
-      if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); }
+      if (!audioCtx) { await initAudio(); audioMuted = false; updateSoundBtn(); fadeInAudio(2); }
       const silent = minters.map((m, i) => i).filter(i => !nucleusVoices.has(i));
       if (silent.length > 0) {
         await toggleVoice(silent[Math.floor(Math.random() * silent.length)]);
