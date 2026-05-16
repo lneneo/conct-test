@@ -760,50 +760,70 @@ const PALETTE = [
     }
 
     // ─── Contract — Sepolia testnet ───────────────────────────────────────────
+    // ⚠️ To switch to mainnet: set CONTRACT_ADDRESS to mainnet address and
+    //    swap ACTIVE_RPCS to MAINNET_RPCS below.
     const CONTRACT_ADDRESS = '0xFbf2168dA2F7c47DB2F0db099876343004777964';
-    const SEPOLIA_RPC      = 'https://ethereum-sepolia-rpc.publicnode.com';
-    const MAINNET_RPC      = 'https://eth.llamarpc.com';
-    // ⚠️ Update CONTRACT_ADDRESS after deploying timer contract to Sepolia
     const CONTRACT_ABI     = [
       'function getAllTokens() view returns (uint256[] tokenIds, address[] owners, uint8[] colorIndices, uint256[] mintTimestamps, uint256[] collectTimestamps)'
     ];
 
-    async function fetchOnChainMinters() {
-      try {
-        // Pass network explicitly — prevents ethers v6 from calling eth_chainId
-        // via postMessage (which throws DataCloneError: Headers object could not be cloned)
-        const sepoliaNetwork = new ethers.Network('sepolia', 11155111);
-        const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC, sepoliaNetwork, { staticNetwork: sepoliaNetwork });
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-        const [tokenIds, owners, colorIndices, mintTimestamps, collectTimestamps] = await contract.getAllTokens();
+    const SEPOLIA_RPCS = [
+      'https://sepolia.drpc.org',
+      'https://eth-sepolia.public.blastapi.io',
+      'https://rpc.ankr.com/eth_sepolia',
+      'https://1rpc.io/sepolia',
+      'https://ethereum-sepolia-rpc.publicnode.com',
+    ];
+    const MAINNET_RPCS = [
+      'https://eth.drpc.org',
+      'https://eth-mainnet.public.blastapi.io',
+      'https://rpc.ankr.com/eth',
+      'https://1rpc.io/eth',
+      'https://eth.llamarpc.com',
+    ];
+    const ACTIVE_RPCS = SEPOLIA_RPCS; // ⚠️ swap to MAINNET_RPCS at mainnet launch
 
-        // Group tokens by owner — each unique owner = one cluster on the orb
-        // Each token carries its own mintedAt (birthday) and collectedAt (when this owner got it)
-        const minterMap = new Map();
-        for (let i = 0; i < tokenIds.length; i++) {
-          const addr      = owners[i].toLowerCase();
-          const mintedMs  = Number(mintTimestamps[i])    * 1000;
-          const collectMs = Number(collectTimestamps[i]) * 1000;
-          if (!minterMap.has(addr)) {
-            minterMap.set(addr, {
-              address:  owners[i],
-              colorIdx: Number(colorIndices[i]),
-              mintedAt: mintedMs,   // earliest mint in this wallet (for backwards compat)
-              tokens:   [],
-              count:    0,
-            });
+    async function fetchOnChainMinters() {
+      // Pass network explicitly — prevents ethers v6 from calling eth_chainId
+      // via postMessage (which throws DataCloneError: Headers object could not be cloned)
+      const sepoliaNetwork = new ethers.Network('sepolia', 11155111);
+      let lastError;
+      for (const rpc of ACTIVE_RPCS) {
+        try {
+          const provider = new ethers.JsonRpcProvider(rpc, sepoliaNetwork, { staticNetwork: sepoliaNetwork });
+          const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+          const [tokenIds, owners, colorIndices, mintTimestamps, collectTimestamps] = await contract.getAllTokens();
+
+          // Group tokens by owner — each unique owner = one cluster on the orb
+          // Each token carries its own mintedAt (birthday) and collectedAt (when this owner got it)
+          const minterMap = new Map();
+          for (let i = 0; i < tokenIds.length; i++) {
+            const addr      = owners[i].toLowerCase();
+            const mintedMs  = Number(mintTimestamps[i])    * 1000;
+            const collectMs = Number(collectTimestamps[i]) * 1000;
+            if (!minterMap.has(addr)) {
+              minterMap.set(addr, {
+                address:  owners[i],
+                colorIdx: Number(colorIndices[i]),
+                mintedAt: mintedMs,   // earliest mint in this wallet (for backwards compat)
+                tokens:   [],
+                count:    0,
+              });
+            }
+            const entry = minterMap.get(addr);
+            entry.tokens.push({ mintedAt: mintedMs, collectedAt: collectMs });
+            entry.count++;
+            // Keep mintedAt as the earliest token birthday across all tokens
+            if (mintedMs < entry.mintedAt) entry.mintedAt = mintedMs;
           }
-          const entry = minterMap.get(addr);
-          entry.tokens.push({ mintedAt: mintedMs, collectedAt: collectMs });
-          entry.count++;
-          // Keep mintedAt as the earliest token birthday across all tokens
-          if (mintedMs < entry.mintedAt) entry.mintedAt = mintedMs;
+          return Array.from(minterMap.values());
+        } catch (e) {
+          console.warn(`[orb] RPC failed (${rpc}), trying next:`, e.message);
+          lastError = e;
         }
-        return Array.from(minterMap.values());
-      } catch (e) {
-        console.warn('[orb] RPC fetch failed:', e);
-        return [];
       }
+      console.warn('[orb] all RPCs failed:', lastError);
+      return [];
     }
 
     // ─── ENS resolution — mainnet only, sequential with delay to avoid rate limits ──
@@ -1714,13 +1734,6 @@ const PALETTE = [
 
     async function autoplayStep() {
       if (!autoplayActive) return;
-      // Restore gain smoothly in case we're resuming after a fade-out pause
-      if (audioMasterGain && audioCtx) {
-        const now = audioCtx.currentTime;
-        audioMasterGain.gain.cancelScheduledValues(now);
-        audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
-        audioMasterGain.gain.linearRampToValueAtTime(0.7, now + 0.3);
-      }
       // Stop all currently playing voices
       for (const id of [...nucleusVoices.keys()]) {
         nucleusVoices.delete(id);
@@ -1751,19 +1764,6 @@ const PALETTE = [
         play.removeAttribute('display');
         stop.setAttribute('display', 'none');
         clearTimeout(autoplayTimer); autoplayTimer = null;
-        // Fade master gain to silence over 2s, then clean up voices (no gain restore here — done on next play)
-        if (audioMasterGain && audioCtx) {
-          const now = audioCtx.currentTime;
-          audioMasterGain.gain.cancelScheduledValues(now);
-          audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
-          audioMasterGain.gain.linearRampToValueAtTime(0, now + 3.0);
-          setTimeout(() => {
-            for (const id of [...nucleusVoices.keys()]) {
-              nucleusVoices.delete(id);
-              if (id !== zoomedMinterId) dismissLabel(id);
-            }
-          }, 3100);
-        }
       }
     });
 
